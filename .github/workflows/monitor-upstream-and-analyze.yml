@@ -14,6 +14,11 @@ on:
         required: false
         type: number
         default: 0
+      skip_merge_commits:
+        description: "Skip merge commits"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   actions: write
@@ -135,7 +140,7 @@ jobs:
           > "$all_commits_tmp"  # Initialize empty file
           found_last_seen=false
 
-          # Fetch commits page by page until we find the last seen SHA or all commits are fetched
+          # Fetch commits page by page(100 commits per page) until the last seen SHA is found or all commits are fetched
           while true; do
             echo "Fetching page $page (commits $((($page-1)*$per_page + 1))-$(($page*$per_page)))..."
             
@@ -144,16 +149,25 @@ jobs:
                 "https://api.github.com/repos/${UPSTREAM_REPO}/commits?sha=${BRANCH}&per_page=${per_page}&page=${page}" \
                 > "commits_page_${page}.json"
 
-            # Check if we got valid data
+            # Check if the returned page has any commits
             if ! jq -e '.[0].sha' "commits_page_${page}.json" > /dev/null 2>&1; then
               echo "No more commits found (end of repository history)"
               break
             fi
 
             # Parse commit SHAs from this page and append to temp file
-            jq -r '.[].sha' "commits_page_${page}.json" >> "$all_commits_tmp"
+            # If skip_merge_commits is true, skip merge commits
+            # Otherwise, include all commits
+            SKIP_MERGE="${{ inputs.skip_merge_commits }}"
+            if [[ -z "$SKIP_MERGE" || "$SKIP_MERGE" == "true" ]]; then
+              jq -r '.[] | select(.parents | length <= 1) | .sha' "commits_page_${page}.json" >> "$all_commits_tmp"
+              echo "Skipping merge commits (parents > 1)"
+            else
+              jq -r '.[] | .sha' "commits_page_${page}.json" >> "$all_commits_tmp"
+              echo "Including all commits (including merges)"
+            fi
 
-            # Check if we found the last seen SHA in this page
+            # Check if the last seen SHA is found in this page
             if [[ -n "$LAST_SEEN" ]]; then
               if grep -q "^${LAST_SEEN}$" "$all_commits_tmp"; then
                 echo "Found last seen SHA in page $page"
@@ -162,13 +176,14 @@ jobs:
               fi
             fi
 
-            # Check if we got fewer commits than requested (indicates last page)
+            # Check if fewer commits than requested are returned (indicates last page)
             commits_count=$(jq length "commits_page_${page}.json")
             if [[ "$commits_count" -lt "$per_page" ]]; then
               echo "Reached end of repository history (got $commits_count commits in page $page)"
               break
             fi
 
+            # Increment the page number to fetch the next page
             page=$((page + 1))
           done
 
@@ -178,15 +193,17 @@ jobs:
           # Clean up temporary page files
           rm -f commits_page_*.json
           
-          # Verify we have commits
+          # Verify that commits are fetched
           if [[ ! -s all_commits.txt ]]; then
             echo "Failed to fetch any commits"
             exit 1
           fi
 
+          # Get the total number of commits fetched
           total_commits=$(wc -l < all_commits.txt)
           echo "Total commits fetched: $total_commits"
           
+          # Check if the last seen SHA is found in the commit history
           if [[ -n "$LAST_SEEN" ]]; then
             if [[ "$found_last_seen" == "true" ]]; then
               echo "Last seen SHA found in commit history"
@@ -425,9 +442,9 @@ jobs:
 
             # Generate artifact name to detect completion
             if [[ -n "${{ inputs.start_commit }}" ]]; then
-              artifact_name="continuous-analysis-history-results-${dispatch_id}-${repo_name}-${current_commit}-filtered"
+              artifact_name="continuous-analysis-history-filtered-results-${dispatch_id}-${repo_name}-${current_commit}-${{ inputs.skip_commits }}"
             else
-              artifact_name="continuous-analysis-results-${repo_name}-${current_commit}-filtered"
+              artifact_name="continuous-analysis-filtered-results-${repo_name}-${current_commit}"
             fi
 
             # Trigger the violation filter workflow
@@ -436,7 +453,8 @@ jobs:
               --ref "${{ env.BRANCH }}" \
               --field current_commit="$current_commit" \
               --field previous_commit="$previous_commit" \
-              --field dispatch_id="$dispatch_id"
+              --field dispatch_id="$dispatch_id" \
+              --field skip_commits_pattern="${{ inputs.skip_commits }}"
 
             # Wait for this workflow to complete
             echo "Waiting for violation filter workflow to complete for commit: $current_commit"
