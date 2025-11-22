@@ -140,7 +140,7 @@ jobs:
           cd ..
 
           # Output the total number of commits fetched
-          echo "Total commits fetched: $(wc -l < all_commits.txt)"
+          echo "Total commits fetched from upstream repository: $(wc -l < all_commits.txt)"
 
           # Get the last seen SHA from the cache file for comparison
           LAST_SEEN="${{ steps.last-sha.outputs.last_sha }}"
@@ -155,7 +155,7 @@ jobs:
           # If the last seen SHA is not set, set the new commits to the latest commit and exit
           if [[ -z "$LAST_SEEN" ]]; then
             head -n 1 all_commits.txt > new_commits.txt
-            echo "First-time run → analyzing latest commit: $(cat new_commits.txt)"
+            echo "First-time run -> analyzing latest commit from upstream repository: $(cat new_commits.txt)"
             echo "has_new_commits=true" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -165,7 +165,7 @@ jobs:
 
           # If there are no new commits, exit
           if [[ ! -s temp_new_commits.txt ]]; then
-            echo "No new commits."
+            echo "No new commits from upstream repository."
             touch new_commits.txt
             echo "has_new_commits=false" >> $GITHUB_OUTPUT
             exit 0
@@ -182,7 +182,7 @@ jobs:
 
           # Output the new commits to the GitHub Actions output
           echo "has_new_commits=true" >> $GITHUB_OUTPUT
-          echo "New commits fetched (total: $(wc -l < new_commits.txt)):"
+          echo "New commits to be analyzed (total: $(wc -l < new_commits.txt)):"
           cat new_commits.txt
 
       - name: Generate dispatch ID
