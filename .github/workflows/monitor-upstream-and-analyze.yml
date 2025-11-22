@@ -14,11 +14,6 @@ on:
         required: false
         type: number
         default: 0
-      skip_merge_commits:
-        description: "Skip merge commits"
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   actions: write
@@ -32,23 +27,26 @@ jobs:
       # NEED TO BE CONFIGURED EACH PROJECT
       UPSTREAM_REPO: "SigmaHQ/pySigma"
       BRANCH: "main"
-      RUNNER_DISPATCH_TIMEOUT: 3600 # 1 hour
-      FILTER_DISPATCH_TIMEOUT: 600 # 10 minutes
+      RUNNER_DISPATCH_TIMEOUT: 7200 # 2 hours
+      FILTER_DISPATCH_TIMEOUT: 1800 # 30 minutes
       MAX_CONCURRENT: 8
 
     steps:
-      - name: Checkout the forked repo
+      - name: Checkout the forked repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.ORG_WIDE_TOKEN }}
           path: forked-repo
           fetch-depth: 0
 
-      - name: Sync fork with upstream
+      - name: Sync fork with upstream repository
         run: |
+          # Set the error handling to exit on error and pipefail to exit on error in any command
           set -euo pipefail
+
+          # Change to the forked repository directory
           cd forked-repo
-          echo "Syncing fork with upstream..."
+          echo "Syncing fork with upstream repository..."
       
           # Configure Git user name and email properly
           git config --global --add safe.directory "$PWD"
@@ -85,6 +83,7 @@ jobs:
 
       - name: Clean up the workspace
         run: |
+          # Remove the forked repository directory
           rm -rf "$GITHUB_WORKSPACE/forked-repo"
 
       - name: Prepare and restore cache folder
@@ -96,22 +95,23 @@ jobs:
 
       - name: Create cache folder if not exists
         run: |
+          # Create the cache folder if it does not exist
           mkdir -p .continuous-analysis-cache
 
       - name: Load last seen SHA from cache folder
         id: last-sha
         run: |
-          # If start_commit is provided, set it as the last seen SHA
+          # If start_commit is provided, set it as the last seen SHA and exit
           if [[ -n "${{ inputs.start_commit }}" ]]; then
             echo "last_sha=${{ inputs.start_commit }}" >> $GITHUB_OUTPUT
             echo "Start commit provided: ${{ inputs.start_commit }}"
             exit 0
           fi
 
-          # Declare the file path to the last seen SHA
+          # Declare the file path to the last seen SHA cache file
           FILE=".continuous-analysis-cache/last_sha.txt"
 
-          # Check if the file exists and load the last seen SHA
+          # Check if the file exists and load the last seen SHA from the cache file
           if [[ -f "$FILE" ]]; then
             LAST_SHA=$(cat "$FILE")
             echo "Last seen SHA found in cache: $LAST_SHA"
@@ -123,30 +123,36 @@ jobs:
           # Output the last seen SHA to the GitHub Actions output for further use
           echo "last_sha=$LAST_SHA" >> $GITHUB_OUTPUT
 
-      - name: Get upstream commits and find new ones
+      - name: Get upstream repository commits and find new ones
         id: check-commits
         run: |
-          echo "Fetching true linear commit history using git rev-list --first-parent..."
+          echo "Fetching commits from upstream repository..."
 
-          # Prepare fresh clone
+          # Prepare fresh clone of the upstream repository
           git clone --depth=100000 "https://github.com/${UPSTREAM_REPO}.git" upstream-repo
           cd upstream-repo
           git checkout "${BRANCH}"
 
-          # Extract FIRST-PARENT linear history of the branch
+          # Extract FIRST-PARENT linear history of the branch for clean history
           git rev-list --first-parent "${BRANCH}" > ../all_commits.txt
 
+          # Change back to the root directory
           cd ..
+
+          # Output the total number of commits fetched
           echo "Total commits fetched: $(wc -l < all_commits.txt)"
 
+          # Get the last seen SHA from the cache file for comparison
           LAST_SEEN="${{ steps.last-sha.outputs.last_sha }}"
           echo "Last seen SHA: $LAST_SEEN"
 
+          # Get the number of commits to skip between processing
           SKIP_COMMITS="${{ inputs.skip_commits }}"
           if [[ -z "$SKIP_COMMITS" || "$SKIP_COMMITS" -lt 0 ]]; then
             SKIP_COMMITS=0
           fi
 
+          # If the last seen SHA is not set, set the new commits to the latest commit and exit
           if [[ -z "$LAST_SEEN" ]]; then
             head -n 1 all_commits.txt > new_commits.txt
             echo "First-time run → analyzing latest commit: $(cat new_commits.txt)"
@@ -154,8 +160,10 @@ jobs:
             exit 0
           fi
 
+          # Filter the commits to get the new commits using the last seen SHA
           awk -v sha="$LAST_SEEN" '$0 ~ sha {exit} {print}' all_commits.txt > temp_new_commits.txt
 
+          # If there are no new commits, exit
           if [[ ! -s temp_new_commits.txt ]]; then
             echo "No new commits."
             touch new_commits.txt
@@ -163,26 +171,30 @@ jobs:
             exit 0
           fi
 
+          # If the number of commits to skip is 0, move the new commits to the new_commits.txt file
           if [[ "$SKIP_COMMITS" -eq 0 ]]; then
             mv temp_new_commits.txt new_commits.txt
           else
+            # If the number of commits to skip is not 0, filter the commits to get the new commits using the skip commits pattern
             awk "NR % ($SKIP_COMMITS + 1) == 1" temp_new_commits.txt > new_commits.txt
             rm temp_new_commits.txt
           fi
 
+          # Output the new commits to the GitHub Actions output
           echo "has_new_commits=true" >> $GITHUB_OUTPUT
-          echo "New commits:"
+          echo "New commits fetched (total: $(wc -l < new_commits.txt)):"
           cat new_commits.txt
 
       - name: Generate dispatch ID
         id: dispatch-id
         run: |
-          # If start_commit is provided, generate a random dispatch ID for history analysis
+          # If start_commit is provided, generate a random dispatch ID for history analysis and exit
           if [[ -n "${{ inputs.start_commit }}" ]]; then
             dispatch_id="$(date -u +%Y%m%dT%H%M%SZ)-$RANDOM"
             echo "dispatch_id=$dispatch_id" >> $GITHUB_OUTPUT
             echo "Generated dispatch ID: $dispatch_id"
           else
+            # Do not generate a dispatch ID for regular runs (future runs will use the same dispatch ID)
             echo "dispatch_id=" >> $GITHUB_OUTPUT
             echo "No dispatch ID needed for regular runs"
           fi
@@ -195,19 +207,13 @@ jobs:
           # Read the commits from file
           mapfile -t commits < new_commits.txt
 
-          # If no new commits to process, exit
-          if [ ${#commits[@]} -eq 0 ]; then
-            echo "No new commits to process"
-            exit 0
-          fi
-
-          # Use the shared dispatch ID
+          # Use the dispatch ID generated in the previous step
           dispatch_id="${{ steps.dispatch-id.outputs.dispatch_id }}"
 
-          # Extract repository name for future usages
+          # Extract repository name for future use
           repo_name=$(echo "${GITHUB_REPOSITORY}" | cut -d'/' -f2)
 
-          # Configuration
+          # Get the maximum number of concurrent workflows and total number of commits to process
           MAX_CONCURRENT=${{ env.MAX_CONCURRENT }}
           total_commits=${#commits[@]}
           echo "Processing ${total_commits} commits in batches of ${MAX_CONCURRENT}..."
@@ -219,6 +225,7 @@ jobs:
               batch_end=$total_commits
             fi
             
+            # Get the size of the batch and the batch number
             batch_size=$((batch_end - batch_start))
             batch_num=$((batch_start / MAX_CONCURRENT + 1))
             echo "Processing batch ${batch_num}: commits ${batch_start}-$((batch_end-1)) (${batch_size} workflows)"
