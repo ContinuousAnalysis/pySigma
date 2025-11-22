@@ -109,6 +109,7 @@ jobs:
             git checkout "${BRANCH}"
             git rev-list --first-parent "${BRANCH}" > ../linear_commits.txt
             cd ..
+            rm -rf upstream-repo
 
             TOTAL=$(wc -l < linear_commits.txt)
             echo "Total commits in first-parent history: $TOTAL"
@@ -152,6 +153,7 @@ jobs:
           git checkout "${BRANCH}"
           git rev-list --first-parent "${BRANCH}" > ../all_commits.txt
           cd ..
+          rm -rf upstream-repo
 
           echo "Total first-parent commits: $(wc -l < all_commits.txt)"
 
