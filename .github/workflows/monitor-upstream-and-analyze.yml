@@ -5,10 +5,11 @@ on:
     - cron: "0 */6 * * *"
   workflow_dispatch:
     inputs:
-      start_commit:
-        description: "Start commit SHA"
+      number_of_commits:
+        description: "Number of previous commits to analyze"
         required: false
-        type: string
+        type: number
+        default: 0 # 0 means analyze future commits
       skip_commits:
         description: "Number of commits to skip between processing (skip x commits pattern)"
         required: false
@@ -101,10 +102,31 @@ jobs:
       - name: Load last seen SHA from cache folder
         id: last-sha
         run: |
-          # If start_commit is provided, set it as the last seen SHA and exit
-          if [[ -n "${{ inputs.start_commit }}" ]]; then
-            echo "last_sha=${{ inputs.start_commit }}" >> $GITHUB_OUTPUT
-            echo "Start commit provided: ${{ inputs.start_commit }}"
+          # If number_of_commits is provided, compute the corresponding SHA automatically
+          if [[ "${{ inputs.number_of_commits }}" -gt 0 ]]; then
+            NUMBER_OF_COMMITS="${{ inputs.number_of_commits }}"
+            echo "Historical analysis requested: number_of_commits = $NUMBER_OF_COMMITS"
+
+            # Fetch true linear history (first-parent only)
+            git clone --depth=100000 "https://github.com/${UPSTREAM_REPO}.git" upstream-repo
+            cd upstream-repo
+            git checkout "${BRANCH}"
+
+            git rev-list --first-parent "${BRANCH}" > ../linear_commits.txt
+            cd ..
+
+            TOTAL=$(wc -l < linear_commits.txt)
+            echo "Total past commits in upstream repository: $TOTAL"
+
+            if [[ "$NUMBER_OF_COMMITS" -ge "$TOTAL" ]]; then
+              echo "ERROR: number_of_commits $NUMBER_OF_COMMITS exceeds commit history length $TOTAL" >&2
+              exit 1
+            fi
+
+            # Extract the SHA at the given index
+            LAST_SHA=$(sed -n "$((NUMBER_OF_COMMITS + 1))p" linear_commits.txt)
+            echo "Computed last seen SHA based on number_of_commits: $LAST_SHA"
+            echo "last_sha=$LAST_SHA" >> $GITHUB_OUTPUT
             exit 0
           fi
 
