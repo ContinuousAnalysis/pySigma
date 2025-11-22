@@ -189,7 +189,7 @@ jobs:
           fi
 
           echo "has_new_commits=true" >> $GITHUB_OUTPUT
-          echo "New commits to analyze:"
+          echo "New commits to analyze (total: $(wc -l < new_commits.txt)):"
           cat new_commits.txt
 
       # --------------------------------------------------------------------
