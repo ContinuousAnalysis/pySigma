@@ -1,8 +1,6 @@
 name: Monitor Upstream Repository
 
 on:
-  schedule:
-    - cron: "0 */6 * * *"
   workflow_dispatch:
     inputs:
       number_of_commits:
