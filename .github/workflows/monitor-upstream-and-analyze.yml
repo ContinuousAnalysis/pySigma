@@ -264,7 +264,7 @@ jobs:
 
               for idx in "${!dispatched_commits[@]}"; do
                 if [[ " ${done[@]} " =~ " ${dispatched_commits[$idx]} " ]]; then continue; fi
-                if echo "$names" | grep -q "^${artifact_names[$idx]}$"; then
+                if echo "$names" | grep -q "^${artifact_names[$idx]}"; then
                   echo "  ✓ Artifact found: ${artifact_names[$idx]}"
                   done+=("${dispatched_commits[$idx]}")
                 fi
@@ -328,7 +328,7 @@ jobs:
               names=$(curl -s -H "Authorization: token $GH_TOKEN" \
                 "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
                 | jq -r '.artifacts[].name')
-              if echo "$names" | grep -q "^${artifact}$"; then
+              if echo "$names" | grep -q "^${artifact}"; then
                 echo "  ✓ Filter artifact: ${artifact}"
                 created=true
                 break
