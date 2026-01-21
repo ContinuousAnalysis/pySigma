@@ -381,7 +381,7 @@ class ConvertTypeTransformation(ValueTransformation):
             # Ignore SigmaNull values - they should not be converted to strings
             if isinstance(val, SigmaNull):
                 return None
-            
+
             if isinstance(val, SigmaExpansion):
                 for i, entry in enumerate(val.values):
                     # avoid re-parsing entries that are already SigmaString
@@ -400,7 +400,7 @@ class ConvertTypeTransformation(ValueTransformation):
             # Ignore SigmaNull values - they should not be converted to numbers
             if isinstance(val, SigmaNull):
                 return None
-            
+
             try:
                 if isinstance(val, SigmaExpansion):
                     for i, entry in enumerate(val.values):
