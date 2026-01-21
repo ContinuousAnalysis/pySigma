@@ -378,10 +378,15 @@ class ConvertTypeTransformation(ValueTransformation):
         self, field: Optional[str], val: SigmaType
     ) -> Optional[Union[SigmaString, SigmaNumber, SigmaExpansion]]:
         if self.target_type == "str":
+            # Ignore SigmaNull values - they should not be converted to strings
+            if isinstance(val, SigmaNull):
+                return None
+            
             if isinstance(val, SigmaExpansion):
                 for i, entry in enumerate(val.values):
                     # avoid re-parsing entries that are already SigmaString
-                    if not isinstance(entry, SigmaString):
+                    # ignore SigmaNull entries
+                    if not isinstance(entry, SigmaString) and not isinstance(entry, SigmaNull):
                         val.values[i] = SigmaString(str(entry))
 
                 return val
@@ -392,10 +397,16 @@ class ConvertTypeTransformation(ValueTransformation):
 
             return SigmaString(str(val))
         elif self.target_type == "num":
+            # Ignore SigmaNull values - they should not be converted to numbers
+            if isinstance(val, SigmaNull):
+                return None
+            
             try:
                 if isinstance(val, SigmaExpansion):
                     for i, entry in enumerate(val.values):
-                        val.values[i] = SigmaNumber(str(entry))
+                        # ignore SigmaNull entries
+                        if not isinstance(entry, SigmaNull):
+                            val.values[i] = SigmaNumber(str(entry))
 
                     return val
 
