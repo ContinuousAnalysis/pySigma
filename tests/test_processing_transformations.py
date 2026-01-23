@@ -2198,6 +2198,50 @@ def test_convert_type_transformation_expansion_str_to_num_no_number():
         transformation.apply_detection_item(detection_item)
 
 
+def test_convert_type_transformation_null_to_str():
+    """Test that SigmaNull values are not converted to strings"""
+    transformation = ConvertTypeTransformation("str")
+    detection_item = SigmaDetectionItem("field", [], [SigmaNull()])
+    result = transformation.apply_detection_item(detection_item)
+    assert result is None  # no transformation should occur
+    assert isinstance(detection_item.value[0], SigmaNull)
+
+
+def test_convert_type_transformation_null_to_num():
+    """Test that SigmaNull values are not converted to numbers"""
+    transformation = ConvertTypeTransformation("num")
+    detection_item = SigmaDetectionItem("field", [], [SigmaNull()])
+    result = transformation.apply_detection_item(detection_item)
+    assert result is None  # no transformation should occur
+    assert isinstance(detection_item.value[0], SigmaNull)
+
+
+def test_convert_type_transformation_expansion_null_to_str():
+    """Test that SigmaNull values in expansions are preserved when converting to strings"""
+    transformation = ConvertTypeTransformation("str")
+    detection_item = SigmaDetectionItem(
+        "field",
+        [],
+        [SigmaExpansion(values=[SigmaNumber(123), SigmaNull(), SigmaString("test")])],
+    )
+    transformation.apply_detection_item(detection_item)
+    assert detection_item.value[0] == SigmaExpansion(
+        values=[SigmaString("123"), SigmaNull(), SigmaString("test")]
+    )
+
+
+def test_convert_type_transformation_expansion_null_to_num():
+    """Test that SigmaNull values in expansions are preserved when converting to numbers"""
+    transformation = ConvertTypeTransformation("num")
+    detection_item = SigmaDetectionItem(
+        "field", [], [SigmaExpansion(values=[SigmaString("456"), SigmaNull(), SigmaNumber(789)])]
+    )
+    transformation.apply_detection_item(detection_item)
+    assert detection_item.value[0] == SigmaExpansion(
+        values=[SigmaNumber(456), SigmaNull(), SigmaNumber(789)]
+    )
+
+
 def test_set_state(dummy_pipeline, sigma_rule: SigmaRule):
     transformation = SetStateTransformation("testkey", "testvalue")
     transformation.set_processing_item(
