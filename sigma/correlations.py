@@ -1,10 +1,21 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Literal
 
 from typing_extensions import Self
+from pyparsing import (
+    Word,
+    alphas,
+    alphanums,
+    Keyword,
+    infix_notation,
+    opAssoc,
+    ParseResults,
+    ParseException,
+)
 
 import sigma.exceptions as sigma_exceptions
 from sigma.exceptions import SigmaRuleLocation, SigmaTimespanError
@@ -157,6 +168,76 @@ class SigmaCorrelationCondition:
 
 
 @dataclass
+class SigmaExtendedCorrelationCondition:
+    """
+    Extended correlation condition supporting boolean expressions with 'and', 'or', and 'not' operators.
+    Uses pyparsing to parse the condition string into a structured representation.
+    """
+
+    expression: str
+    source: SigmaRuleLocation | None = field(default=None, compare=False)
+    _parsed: Any = field(init=False, repr=False, compare=False, default=None)
+
+    def __post_init__(self: Self) -> None:
+        """Parse and validate the extended condition expression."""
+        try:
+            self._parsed = self.parse(self.expression)
+        except ParseException as e:
+            raise sigma_exceptions.SigmaCorrelationConditionError(
+                f"Failed to parse extended condition expression: {str(e)}",
+                source=self.source,
+            )
+
+    @classmethod
+    def parse(cls, expression: str) -> ParseResults:
+        """
+        Parse an extended correlation condition expression.
+
+        Grammar:
+            rule_identifier: Word(alphas + "_", alphanums + "_")
+            and_operator: Keyword("and")
+            or_operator: Keyword("or")
+            not_operator: Keyword("not")
+            expr: infix_notation with standard precedence (not > and > or)
+        """
+        # Define rule identifier - starts with letter or underscore, followed by alphanumerics or underscores
+        rule_identifier = Word(alphas + "_", alphanums + "_")
+
+        # Define operators
+        and_op = Keyword("and")
+        or_op = Keyword("or")
+        not_op = Keyword("not")
+
+        # Define expression using infix notation
+        # Precedence: not (highest) > and > or (lowest)
+        expr = infix_notation(
+            rule_identifier,
+            [
+                (not_op, 1, opAssoc.RIGHT),
+                (and_op, 2, opAssoc.LEFT),
+                (or_op, 2, opAssoc.LEFT),
+            ],
+        )
+
+        return expr.parse_string(expression, parse_all=True)
+
+    def get_referenced_rules(self) -> set[str]:
+        """
+        Extract all rule identifiers referenced in the condition expression.
+
+        Returns:
+            Set of rule identifier strings.
+        """
+        # Use regex to extract identifiers, excluding keywords
+        referenced = set(re.findall(r"\b(?!and\b|or\b|not\b)(\w+)\b", self.expression))
+        return referenced
+
+    def to_dict(self: Self) -> str:
+        """Return the expression string for serialization."""
+        return self.expression
+
+
+@dataclass
 class SigmaCorrelationTimespan:
     spec: str = field(compare=False)
     seconds: int = field(init=False)
@@ -270,17 +351,42 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
     )
     group_by: list[str] | None = None
     aliases: SigmaCorrelationFieldAliases = field(default_factory=SigmaCorrelationFieldAliases)
-    condition: SigmaCorrelationCondition = field(
+    condition: SigmaCorrelationCondition | SigmaExtendedCorrelationCondition = field(
         default_factory=lambda: SigmaCorrelationCondition(SigmaCorrelationConditionOperator.GTE, 1)
     )
     source: SigmaRuleLocation | None = field(default=None, compare=False)
 
     def __post_init__(self: Self) -> None:
         super().__post_init__()
-        if (
-            self.type not in {SigmaCorrelationType.TEMPORAL, SigmaCorrelationType.TEMPORAL_ORDERED}
-            and self.condition is None
-        ):
+        # Validate extended conditions are only used with temporal correlation types
+        if isinstance(self.condition, SigmaExtendedCorrelationCondition) and self.type not in {
+            SigmaCorrelationType.TEMPORAL,
+            SigmaCorrelationType.TEMPORAL_ORDERED,
+        }:
+            raise sigma_exceptions.SigmaCorrelationConditionError(
+                "Extended conditions can only be used with temporal or temporal_ordered correlation types",
+                source=self.source,
+            )
+
+        # Validate that all rules in the rules list are referenced in extended condition
+        if isinstance(self.condition, SigmaExtendedCorrelationCondition):
+            referenced_rules = self.condition.get_referenced_rules()
+
+            # Get all rule references from the rules list
+            defined_rules = {rule.reference for rule in self.rules}
+
+            # Check if all defined rules are referenced in the condition
+            unreferenced_rules = defined_rules - referenced_rules
+            if unreferenced_rules:
+                raise sigma_exceptions.SigmaCorrelationConditionError(
+                    f"Rules defined but not referenced in extended condition: {', '.join(sorted(unreferenced_rules))}",
+                    source=self.source,
+                )
+
+        if self.type not in {
+            SigmaCorrelationType.TEMPORAL,
+            SigmaCorrelationType.TEMPORAL_ORDERED,
+        } and not isinstance(self.condition, SigmaCorrelationCondition):
             raise sigma_exceptions.SigmaCorrelationRuleError(
                 "Non-temporal Sigma correlation rule without condition", source=self.source
             )
@@ -293,6 +399,7 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
                 SigmaCorrelationType.VALUE_PERCENTILE,
                 SigmaCorrelationType.VALUE_MEDIAN,
             }
+            and isinstance(self.condition, SigmaCorrelationCondition)
             and self.condition.fieldref is None
         ):
             # Format type name for error message (special case for VALUE_COUNT to match existing tests)
@@ -408,15 +515,39 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
         else:
             aliases = SigmaCorrelationFieldAliases()
 
-        # Condition
-        condition = correlation_rule.get("condition")
-        if condition is not None:
-            if isinstance(condition, dict):
-                condition = SigmaCorrelationCondition.from_dict(condition, source=source)
+        # Condition - can be either a dict (basic condition) or a string (extended condition)
+        condition_value = correlation_rule.get("condition")
+        condition: SigmaCorrelationCondition | SigmaExtendedCorrelationCondition
+
+        if condition_value is not None:
+            if isinstance(condition_value, dict):
+                # Basic condition
+                condition = SigmaCorrelationCondition.from_dict(condition_value, source=source)
+            elif isinstance(condition_value, str):
+                # Extended condition - only valid for temporal types
+                if correlation_type not in (
+                    SigmaCorrelationType.TEMPORAL,
+                    SigmaCorrelationType.TEMPORAL_ORDERED,
+                ):
+                    errors.append(
+                        sigma_exceptions.SigmaCorrelationRuleError(
+                            "Extended conditions (string) can only be used with temporal or temporal_ordered correlation types",
+                            source=source,
+                        )
+                    )
+                else:
+                    # Extended condition - parse as SigmaExtendedCorrelationCondition
+                    try:
+                        condition = SigmaExtendedCorrelationCondition(
+                            condition_value, source=source
+                        )
+                    except sigma_exceptions.SigmaCorrelationConditionError as e:
+                        errors.append(e)
             else:
                 errors.append(
                     sigma_exceptions.SigmaCorrelationRuleError(
-                        "Sigma correlation condition definition must be a dict", source=source
+                        "Sigma correlation condition definition must be a dict or string",
+                        source=source,
                     )
                 )
         elif correlation_type not in (
@@ -431,7 +562,9 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
         elif correlation_type in (
             SigmaCorrelationType.TEMPORAL,
             SigmaCorrelationType.TEMPORAL_ORDERED,
-        ):  # default condition for temporal correlation rules: count >= number of rules
+        ):
+            # For temporal types without condition, set default
+            # default condition for temporal correlation rules: count >= number of rules
             condition = SigmaCorrelationCondition(
                 op=SigmaCorrelationConditionOperator.GTE, count=len(rules), source=source
             )
@@ -464,8 +597,12 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
             "timespan": self.timespan.spec,
             "group-by": self.group_by,
             "aliases": self.aliases.to_dict() if self.aliases is not None else None,
-            "condition": self.condition.to_dict() if self.condition is not None else None,
         }
+
+        # Serialize condition based on its type
+        if self.condition is not None:
+            dc["condition"] = self.condition.to_dict()
+
         d["correlation"] = dc
 
         return d

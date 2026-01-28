@@ -300,7 +300,8 @@ def test_correlation_without_timespan():
 
 def test_correlation_invalid_condition():
     with pytest.raises(
-        SigmaCorrelationRuleError, match="Sigma correlation condition definition must be a dict"
+        SigmaCorrelationRuleError,
+        match="Extended conditions \\(string\\) can only be used with temporal",
     ):
         SigmaCorrelationRule.from_dict(
             {
@@ -669,3 +670,464 @@ def test_value_percentile_without_field_reference():
                 },
             }
         )
+
+
+def test_temporal_correlation_with_extended_condition():
+    """Test that temporal correlation can use an extended condition (string)."""
+    rule = SigmaCorrelationRule.from_dict(
+        {
+            "title": "Temporal with extended condition",
+            "correlation": {
+                "type": "temporal",
+                "rules": ["rule_a", "rule_b"],
+                "group-by": ["user"],
+                "timespan": "5m",
+                "condition": "rule_a and not rule_b",
+            },
+        }
+    )
+    assert rule.type == SigmaCorrelationType.TEMPORAL
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    assert isinstance(rule.condition, SigmaExtendedCorrelationCondition)
+    assert rule.condition.expression == "rule_a and not rule_b"
+
+
+def test_temporal_ordered_correlation_with_extended_condition():
+    """Test that temporal_ordered correlation can use an extended condition (string)."""
+    rule = SigmaCorrelationRule.from_dict(
+        {
+            "title": "Temporal ordered with extended condition",
+            "correlation": {
+                "type": "temporal_ordered",
+                "rules": ["rule_a", "rule_b", "rule_c"],
+                "group-by": ["user"],
+                "timespan": "30s",
+                "condition": "rule_a and not rule_b and rule_c",
+            },
+        }
+    )
+    assert rule.type == SigmaCorrelationType.TEMPORAL_ORDERED
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    assert isinstance(rule.condition, SigmaExtendedCorrelationCondition)
+    assert rule.condition.expression == "rule_a and not rule_b and rule_c"
+
+
+def test_extended_condition_requires_temporal_type():
+    """Test that extended conditions (string) can only be used with temporal types."""
+    with pytest.raises(
+        SigmaCorrelationRuleError,
+        match="Extended conditions \\(string\\) can only be used with temporal",
+    ):
+        SigmaCorrelationRule.from_dict(
+            {
+                "title": "Invalid extended condition",
+                "correlation": {
+                    "type": "event_count",
+                    "rules": ["rule_a", "rule_b"],
+                    "group-by": ["user"],
+                    "timespan": "5m",
+                    "condition": "rule_a and rule_b",
+                },
+            }
+        )
+
+
+def test_temporal_correlation_with_basic_condition():
+    """Test that temporal correlation still works with basic dict condition."""
+    rule = SigmaCorrelationRule.from_dict(
+        {
+            "title": "Temporal with basic condition",
+            "correlation": {
+                "type": "temporal",
+                "rules": ["rule_a", "rule_b"],
+                "group-by": ["user"],
+                "timespan": "5m",
+                "condition": {"gte": 1},
+            },
+        }
+    )
+    from sigma.correlations import SigmaCorrelationCondition
+
+    assert isinstance(rule.condition, SigmaCorrelationCondition)
+    assert rule.type == SigmaCorrelationType.TEMPORAL
+    assert rule.condition.op == SigmaCorrelationConditionOperator.GTE
+    assert rule.condition.count == 1
+
+
+def test_extended_condition_serialization():
+    """Test that extended condition is properly serialized to dict."""
+    rule = SigmaCorrelationRule.from_dict(
+        {
+            "title": "Extended condition serialization test",
+            "correlation": {
+                "type": "temporal",
+                "rules": ["rule_a", "rule_b"],
+                "group-by": ["user"],
+                "timespan": "5m",
+                "condition": "rule_a and not rule_b",
+            },
+        }
+    )
+
+    rule_dict = rule.to_dict()
+    assert rule_dict["correlation"]["condition"] == "rule_a and not rule_b"
+    assert isinstance(rule_dict["correlation"]["condition"], str)
+
+
+def test_basic_condition_serialization():
+    """Test that basic dict conditions are still properly serialized."""
+    rule = SigmaCorrelationRule.from_dict(
+        {
+            "title": "Event Count Correlation",
+            "correlation": {
+                "type": "event_count",
+                "rules": ["rule_a", "rule_b"],
+                "group-by": ["user"],
+                "timespan": "5m",
+                "condition": {"gte": 2},
+            },
+        }
+    )
+    rule_dict = rule.to_dict()
+    assert rule_dict["correlation"]["condition"] == {"gte": 2}
+    assert isinstance(rule_dict["correlation"]["condition"], dict)
+
+
+def test_extended_condition_complex():
+    """Test complex extended condition with multiple operators."""
+    rule = SigmaCorrelationRule.from_dict(
+        {
+            "title": "Complex Extended Condition",
+            "correlation": {
+                "type": "temporal",
+                "rules": ["rule_a", "rule_b", "rule_c", "rule_d"],
+                "group-by": ["user", "host"],
+                "timespan": "10m",
+                "condition": "(rule_a or rule_b) and not (rule_c or rule_d)",
+            },
+        }
+    )
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    assert isinstance(rule.condition, SigmaExtendedCorrelationCondition)
+    assert rule.condition.expression == "(rule_a or rule_b) and not (rule_c or rule_d)"
+
+
+def test_extended_condition_unreferenced_rule():
+    """Test that unreferenced rules in extended condition raise an error."""
+    with pytest.raises(
+        SigmaCorrelationConditionError,
+        match="Rules defined but not referenced in extended condition: rule_c",
+    ):
+        SigmaCorrelationRule.from_dict(
+            {
+                "title": "Unreferenced rule",
+                "correlation": {
+                    "type": "temporal",
+                    "rules": ["rule_a", "rule_b", "rule_c"],
+                    "group-by": ["user"],
+                    "timespan": "5m",
+                    "condition": "rule_a and rule_b",
+                },
+            }
+        )
+
+
+def test_extended_condition_invalid_syntax():
+    """Test that invalid syntax in extended condition raises an error."""
+    with pytest.raises(
+        SigmaCorrelationConditionError,
+        match="Failed to parse extended condition expression",
+    ):
+        SigmaCorrelationRule.from_dict(
+            {
+                "title": "Invalid syntax",
+                "correlation": {
+                    "type": "temporal",
+                    "rules": ["rule_a", "rule_b"],
+                    "group-by": ["user"],
+                    "timespan": "5m",
+                    "condition": "rule_a and and rule_b",  # Invalid syntax
+                },
+            }
+        )
+
+
+def test_extended_condition_multiple_unreferenced_rules():
+    """Test error message when multiple rules are not referenced."""
+    with pytest.raises(
+        SigmaCorrelationConditionError,
+        match="Rules defined but not referenced in extended condition: rule_c, rule_d",
+    ):
+        SigmaCorrelationRule.from_dict(
+            {
+                "title": "Multiple missing rule references",
+                "correlation": {
+                    "type": "temporal",
+                    "rules": ["rule_a", "rule_b", "rule_c", "rule_d"],
+                    "group-by": ["user"],
+                    "timespan": "5m",
+                    "condition": "rule_a and rule_b",  # rule_c and rule_d are missing
+                },
+            }
+        )
+
+
+# Tests for SigmaExtendedCorrelationCondition parsing
+def test_extended_condition_parse_simple_identifier():
+    """Test parsing a simple rule identifier."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="rule_a")
+    assert cond.expression == "rule_a"
+    assert cond._parsed is not None
+    # Simple identifier: ['rule_a']
+    assert list(cond._parsed) == ["rule_a"]
+    assert cond.get_referenced_rules() == {"rule_a"}
+
+
+def test_extended_condition_parse_basic_and():
+    """Test parsing basic AND expression."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="rule_a and rule_b")
+    assert cond.expression == "rule_a and rule_b"
+    assert cond._parsed is not None
+    # Binary AND: [['rule_a', 'and', 'rule_b']]
+    parsed_list = list(cond._parsed)
+    assert len(parsed_list) == 1
+    assert list(parsed_list[0]) == ["rule_a", "and", "rule_b"]
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b"}
+
+
+def test_extended_condition_parse_basic_or():
+    """Test parsing basic OR expression."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="rule_a or rule_b")
+    assert cond.expression == "rule_a or rule_b"
+    assert cond._parsed is not None
+    # Binary OR: [['rule_a', 'or', 'rule_b']]
+    parsed_list = list(cond._parsed)
+    assert len(parsed_list) == 1
+    assert list(parsed_list[0]) == ["rule_a", "or", "rule_b"]
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b"}
+
+
+def test_extended_condition_parse_basic_not():
+    """Test parsing basic NOT expression."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="not rule_a")
+    assert cond.expression == "not rule_a"
+    assert cond._parsed is not None
+    # Unary NOT: [['not', 'rule_a']]
+    parsed_list = list(cond._parsed)
+    assert len(parsed_list) == 1
+    assert list(parsed_list[0]) == ["not", "rule_a"]
+    assert cond.get_referenced_rules() == {"rule_a"}
+
+
+def test_extended_condition_parse_multiple_and():
+    """Test parsing multiple AND operations."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="rule_a and rule_b and rule_c")
+    assert cond.expression == "rule_a and rule_b and rule_c"
+    assert cond._parsed is not None
+    # Left-associative AND produces flat list: [['rule_a', 'and', 'rule_b', 'and', 'rule_c']]
+    parsed_list = list(cond._parsed)
+    assert len(parsed_list) == 1
+    outer = list(parsed_list[0])
+    assert outer == ["rule_a", "and", "rule_b", "and", "rule_c"]
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c"}
+
+
+def test_extended_condition_parse_multiple_or():
+    """Test parsing multiple OR operations."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="rule_a or rule_b or rule_c")
+    assert cond.expression == "rule_a or rule_b or rule_c"
+    assert cond._parsed is not None
+    # Left-associative OR produces flat list: [['rule_a', 'or', 'rule_b', 'or', 'rule_c']]
+    parsed_list = list(cond._parsed)
+    assert len(parsed_list) == 1
+    outer = list(parsed_list[0])
+    assert outer == ["rule_a", "or", "rule_b", "or", "rule_c"]
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c"}
+
+
+def test_extended_condition_parse_precedence_and_or():
+    """Test that AND has higher precedence than OR (rule_a and rule_b or rule_c = (rule_a and rule_b) or rule_c)."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="rule_a and rule_b or rule_c")
+    assert cond.expression == "rule_a and rule_b or rule_c"
+    assert cond._parsed is not None
+    # AND binds tighter than OR: [[['rule_a', 'and', 'rule_b'], 'or', 'rule_c']]
+    parsed_list = list(cond._parsed)
+    assert len(parsed_list) == 1
+    outer = list(parsed_list[0])
+    assert len(outer) == 3
+    # First element is the AND expression
+    assert list(outer[0]) == ["rule_a", "and", "rule_b"]
+    assert outer[1] == "or"
+    assert outer[2] == "rule_c"
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c"}
+
+
+def test_extended_condition_parse_precedence_or_and():
+    """Test that AND has higher precedence than OR (rule_a or rule_b and rule_c = rule_a or (rule_b and rule_c))."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="rule_a or rule_b and rule_c")
+    assert cond.expression == "rule_a or rule_b and rule_c"
+    assert cond._parsed is not None
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c"}
+
+
+def test_extended_condition_parse_precedence_not_and():
+    """Test that NOT has higher precedence than AND (not rule_a and rule_b = (not rule_a) and rule_b)."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="not rule_a and rule_b")
+    assert cond.expression == "not rule_a and rule_b"
+    assert cond._parsed is not None
+    # NOT binds tighter than AND: [[['not', 'rule_a'], 'and', 'rule_b']]
+    parsed_list = list(cond._parsed)
+    assert len(parsed_list) == 1
+    outer = list(parsed_list[0])
+    assert len(outer) == 3
+    # First element is the NOT expression
+    assert list(outer[0]) == ["not", "rule_a"]
+    assert outer[1] == "and"
+    assert outer[2] == "rule_b"
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b"}
+
+
+def test_extended_condition_parse_parentheses_or_and():
+    """Test explicit grouping with parentheses overrides default precedence."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="(rule_a or rule_b) and rule_c")
+    assert cond.expression == "(rule_a or rule_b) and rule_c"
+    assert cond._parsed is not None
+    # Parentheses force OR to bind first: [[['rule_a', 'or', 'rule_b'], 'and', 'rule_c']]
+    parsed_list = list(cond._parsed)
+    assert len(parsed_list) == 1
+    outer = list(parsed_list[0])
+    assert len(outer) == 3
+    # First element is the OR expression (grouped by parentheses)
+    assert list(outer[0]) == ["rule_a", "or", "rule_b"]
+    assert outer[1] == "and"
+    assert outer[2] == "rule_c"
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c"}
+
+
+def test_extended_condition_parse_parentheses_not():
+    """Test parentheses with NOT operator."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="not (rule_a or rule_b)")
+    assert cond.expression == "not (rule_a or rule_b)"
+    assert cond._parsed is not None
+    # NOT of grouped OR: [['not', ['rule_a', 'or', 'rule_b']]]
+    parsed_list = list(cond._parsed)
+    assert len(parsed_list) == 1
+    outer = list(parsed_list[0])
+    assert len(outer) == 2
+    assert outer[0] == "not"
+    # Second element is the grouped OR expression
+    assert list(outer[1]) == ["rule_a", "or", "rule_b"]
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b"}
+
+
+def test_extended_condition_parse_complex_nested():
+    """Test complex nested expression with multiple operators and grouping."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(
+        expression="(rule_a or rule_b) and not (rule_c or rule_d)"
+    )
+    assert cond.expression == "(rule_a or rule_b) and not (rule_c or rule_d)"
+    assert cond._parsed is not None
+    # Complex: [[['rule_a', 'or', 'rule_b'], 'and', ['not', ['rule_c', 'or', 'rule_d']]]]
+    parsed_list = list(cond._parsed)
+    assert len(parsed_list) == 1
+    outer = list(parsed_list[0])
+    assert len(outer) == 3
+    # First part: (rule_a or rule_b)
+    assert list(outer[0]) == ["rule_a", "or", "rule_b"]
+    assert outer[1] == "and"
+    # Third part: not (rule_c or rule_d)
+    not_expr = list(outer[2])
+    assert len(not_expr) == 2
+    assert not_expr[0] == "not"
+    assert list(not_expr[1]) == ["rule_c", "or", "rule_d"]
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c", "rule_d"}
+
+
+def test_extended_condition_parse_complex_mixed():
+    """Test complex mixed expression with all operators."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(
+        expression="rule_a and (rule_b or not rule_c) and rule_d"
+    )
+    assert cond.expression == "rule_a and (rule_b or not rule_c) and rule_d"
+    assert cond._parsed is not None
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c", "rule_d"}
+
+
+def test_extended_condition_parse_underscore_identifiers():
+    """Test parsing rule identifiers with underscores."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="rule_a_1 and rule_b_2 or not rule_c_3")
+    assert cond.expression == "rule_a_1 and rule_b_2 or not rule_c_3"
+    assert cond._parsed is not None
+    assert cond.get_referenced_rules() == {"rule_a_1", "rule_b_2", "rule_c_3"}
+
+
+def test_extended_condition_parse_multiple_nots():
+    """Test multiple NOT operators in sequence."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(expression="not rule_a and not rule_b")
+    assert cond.expression == "not rule_a and not rule_b"
+    assert cond._parsed is not None
+    # Multiple NOTs: [[['not', 'rule_a'], 'and', ['not', 'rule_b']]]
+    parsed_list = list(cond._parsed)
+    assert len(parsed_list) == 1
+    outer = list(parsed_list[0])
+    assert len(outer) == 3
+    # First NOT
+    assert list(outer[0]) == ["not", "rule_a"]
+    assert outer[1] == "and"
+    # Second NOT
+    assert list(outer[2]) == ["not", "rule_b"]
+    assert cond.get_referenced_rules() == {"rule_a", "rule_b"}
+
+
+def test_extended_condition_parse_deeply_nested():
+    """Test deeply nested expression with multiple levels of grouping."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    cond = SigmaExtendedCorrelationCondition(
+        expression="((rule_a and rule_b) or (rule_c and rule_d)) and not (rule_e or rule_f)"
+    )
+    assert (
+        cond.expression == "((rule_a and rule_b) or (rule_c and rule_d)) and not (rule_e or rule_f)"
+    )
+    assert cond._parsed is not None
+    assert cond.get_referenced_rules() == {
+        "rule_a",
+        "rule_b",
+        "rule_c",
+        "rule_d",
+        "rule_e",
+        "rule_f",
+    }
