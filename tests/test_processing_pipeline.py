@@ -1429,3 +1429,33 @@ def test_processingitem_match_detection_item_with_field_name_condition_expressio
         ),
     )
     assert processing_item.match_detection_item(detection_item) == True
+
+
+def test_processingpipeline_empty_items_list():
+    """Test that empty processing items list does not raise error during initialization."""
+    # This validates that all([]) returning True does not cause validation to be skipped
+    pipeline = ProcessingPipeline(items=[])
+    assert pipeline.items == []
+
+
+def test_processingpipeline_empty_postprocessing_items_list():
+    """Test that empty postprocessing items list does not raise error during initialization."""
+    # This validates that all([]) returning True does not cause validation to be skipped
+    pipeline = ProcessingPipeline(postprocessing_items=[])
+    assert pipeline.postprocessing_items == []
+
+
+def test_processingpipeline_empty_finalizers_list():
+    """Test that empty finalizers list does not raise error during initialization."""
+    # This validates that all([]) returning True does not cause validation to be skipped
+    pipeline = ProcessingPipeline(finalizers=[])
+    assert pipeline.finalizers == []
+
+
+def test_processingpipeline_all_empty_lists():
+    """Test that a pipeline with all empty lists can be created without errors."""
+    # This validates that all([]) returning True does not cause validation to be skipped
+    pipeline = ProcessingPipeline(items=[], postprocessing_items=[], finalizers=[])
+    assert pipeline.items == []
+    assert pipeline.postprocessing_items == []
+    assert pipeline.finalizers == []
