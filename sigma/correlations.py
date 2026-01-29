@@ -6,6 +6,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Literal
 
 from typing_extensions import Self
+from typing import Union, ClassVar, cast
 from pyparsing import (
     Word,
     alphas,
@@ -16,6 +17,7 @@ from pyparsing import (
     ParseResults,
     ParseException,
 )
+from abc import ABC
 
 import sigma.exceptions as sigma_exceptions
 from sigma.exceptions import SigmaRuleLocation, SigmaTimespanError
@@ -75,6 +77,11 @@ class SigmaRuleReference:
             sigma_exceptions.SigmaRuleNotFoundError: If the referenced rule cannot be found in the given rule collection.
         """
         self.rule = rule_collection[self.reference]
+
+    @classmethod
+    def from_parsed(cls, s: str, l: int, t: ParseResults) -> list["SigmaRuleReference"]:
+        """Create rule reference from parse result (for pyparsing integration)."""
+        return [cls(t[0])]
 
 
 class SigmaCorrelationConditionOperator(Enum):
@@ -167,6 +174,57 @@ class SigmaCorrelationCondition:
         return result
 
 
+# Correlation condition parse tree classes
+@dataclass
+class CorrelationConditionItem(ABC):
+    """Base class for correlation condition parse tree items."""
+
+    arg_count: ClassVar[int]
+    args: list[Union[SigmaRuleReference, "CorrelationConditionItem"]]
+
+    @classmethod
+    def from_parsed(
+        cls, s: str, l: int, t: Union[ParseResults, list]
+    ) -> list["CorrelationConditionItem"]:
+        """Create condition object from parse result."""
+        if cls.arg_count == 1:
+            # Unary operator (NOT)
+            if isinstance(t, ParseResults):
+                args = [t[0][-1]]
+            else:
+                args = [t[-1]]
+        elif cls.arg_count > 1:
+            # Binary operators (AND, OR) - handle flat lists from pyparsing
+            if isinstance(t, ParseResults):
+                args = t[0][0::2]  # Take every other element (skip operators)
+            else:
+                args = t[0::2]
+        else:
+            args = list()
+        return [cls(args)]
+
+
+@dataclass
+class CorrelationConditionOR(CorrelationConditionItem):
+    """OR operator in correlation condition."""
+
+    arg_count: ClassVar[int] = 2
+
+
+@dataclass
+class CorrelationConditionAND(CorrelationConditionItem):
+    """AND operator in correlation condition."""
+
+    arg_count: ClassVar[int] = 2
+
+
+@dataclass
+class CorrelationConditionNOT(CorrelationConditionItem):
+    """NOT operator in correlation condition."""
+
+    arg_count: ClassVar[int] = 1
+
+
 @dataclass
 class SigmaExtendedCorrelationCondition:
     """
@@ -176,7 +234,9 @@ class SigmaExtendedCorrelationCondition:
 
     expression: str
     source: SigmaRuleLocation | None = field(default=None, compare=False)
-    _parsed: Any = field(init=False, repr=False, compare=False, default=None)
+    _parsed: Union[CorrelationConditionItem, SigmaRuleReference] = field(
+        init=False, repr=False, compare=False, default=None
+    )
 
     def __post_init__(self: Self) -> None:
         """Parse and validate the extended condition expression."""
@@ -189,7 +249,7 @@ class SigmaExtendedCorrelationCondition:
             )
 
     @classmethod
-    def parse(cls, expression: str) -> ParseResults:
+    def parse(cls, expression: str) -> Union[CorrelationConditionItem, SigmaRuleReference]:
         """
         Parse an extended correlation condition expression.
 
@@ -199,27 +259,27 @@ class SigmaExtendedCorrelationCondition:
             or_operator: Keyword("or")
             not_operator: Keyword("not")
             expr: infix_notation with standard precedence (not > and > or)
+
+        Returns:
+            Parse tree with CorrelationCondition* objects.
         """
         # Define rule identifier - starts with letter or underscore, followed by alphanumerics or underscores
         rule_identifier = Word(alphas + "_", alphanums + "_")
-
-        # Define operators
-        and_op = Keyword("and")
-        or_op = Keyword("or")
-        not_op = Keyword("not")
+        rule_identifier.set_parse_action(SigmaRuleReference.from_parsed)
 
         # Define expression using infix notation
         # Precedence: not (highest) > and > or (lowest)
         expr = infix_notation(
             rule_identifier,
             [
-                (not_op, 1, opAssoc.RIGHT),
-                (and_op, 2, opAssoc.LEFT),
-                (or_op, 2, opAssoc.LEFT),
+                (Keyword("not"), 1, opAssoc.RIGHT, CorrelationConditionNOT.from_parsed),
+                (Keyword("and"), 2, opAssoc.LEFT, CorrelationConditionAND.from_parsed),
+                (Keyword("or"), 2, opAssoc.LEFT, CorrelationConditionOR.from_parsed),
             ],
         )
 
-        return expr.parse_string(expression, parse_all=True)
+        result = expr.parse_string(expression, parse_all=True)
+        return result[0]
 
     def get_referenced_rules(self) -> set[str]:
         """
