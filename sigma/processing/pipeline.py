@@ -707,7 +707,9 @@ class ProcessingPipeline:
             raise TypeError(
                 "Each item in a postprocessing pipeline must be a QueryPostprocessingItem - don't use processing classes directly!"
             )
-        if self.finalizers and not all((isinstance(finalizer, Finalizer) for finalizer in self.finalizers)):
+        if self.finalizers and not all(
+            (isinstance(finalizer, Finalizer) for finalizer in self.finalizers)
+        ):
             raise TypeError("Each item in a finalizer pipeline must be a Finalizer")
 
         # Initialize contained items with just instantiated processing pipeline as context.
