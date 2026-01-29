@@ -163,7 +163,7 @@ class SigmaString(SigmaType):
                     if acc:
                         r.append(
                             "".join(acc)
-                        ) # append accumulated string to parsed result if there was something
+                        )  # append accumulated string to parsed result if there was something
                     r.append(char_mapping[c])  # append special character to parsed result
                     acc = []  # accumulation reset
                 else:  # characters without special meaning aren't accumulated
