@@ -52,6 +52,8 @@ SigmaCorrelationTypeLiteral = Literal[
     "value_count",
     "temporal",
     "temporal_ordered",
+    "temporal_extended",
+    "temporal_ordered_extended",
     "value_sum",
     "value_avg",
     "value_percentile",
@@ -281,6 +283,11 @@ class SigmaExtendedCorrelationCondition:
         result = expr.parse_string(expression, parse_all=True)
         return result[0]
 
+    @property
+    def parsed(self) -> Union[CorrelationConditionItem, SigmaRuleReference]:
+        """Return the parsed correlation condition tree."""
+        return self._parsed
+
     def get_referenced_rules(self) -> set[str]:
         """
         Extract all rule identifiers referenced in the condition expression.
@@ -501,12 +508,13 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
             )
 
         # Rules
-        rules = correlation_rule.get("rules")
-        if rules is not None:
-            if isinstance(rules, str):
-                rules = [SigmaRuleReference(rules)]
-            elif isinstance(rules, list):
-                rules = [SigmaRuleReference(rule) for rule in rules]
+        rules_value = correlation_rule.get("rules")
+        if rules_value is not None:
+            if isinstance(rules_value, str):
+                # Simple rule reference
+                rules = [SigmaRuleReference(rules_value)]
+            elif isinstance(rules_value, list):
+                rules = [SigmaRuleReference(rule) for rule in rules_value]
             else:
                 errors.append(
                     sigma_exceptions.SigmaCorrelationRuleError(
@@ -601,6 +609,27 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
                         condition = SigmaExtendedCorrelationCondition(
                             condition_value, source=source
                         )
+                        # Extract rule references from the parsed extended condition
+                        parsed = condition.parsed
+                        rule_refs_from_condition = []
+
+                        def extract_refs(node):
+                            if isinstance(node, SigmaRuleReference):
+                                rule_refs_from_condition.append(node)
+                            elif isinstance(node, CorrelationConditionItem):
+                                for arg in node.args:
+                                    extract_refs(arg)
+
+                        extract_refs(parsed)
+
+                        # Merge rule references from condition with those from rules field
+                        # Create a dict to track unique references by their reference string
+                        unique_refs = {ref.reference: ref for ref in rules}
+                        for ref in rule_refs_from_condition:
+                            if ref.reference not in unique_refs:
+                                unique_refs[ref.reference] = ref
+                        rules = list(unique_refs.values())
+
                     except sigma_exceptions.SigmaCorrelationConditionError as e:
                         errors.append(e)
             else:
