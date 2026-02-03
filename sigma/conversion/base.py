@@ -1523,10 +1523,7 @@ class TextQueryBackend(Backend):
             return False
 
         # Map correlation condition classes to regular condition classes for unified precedence handling
-        precedence_map: dict[
-            Type[Union[ConditionItem, CorrelationConditionItem]],
-            Type[ConditionItem],
-        ] = {
+        precedence_map: dict[Any, Any] = {
             CorrelationConditionNOT: ConditionNOT,
             CorrelationConditionAND: ConditionAND,
             CorrelationConditionOR: ConditionOR,
@@ -1542,7 +1539,13 @@ class TextQueryBackend(Backend):
             inner, (ConditionFieldEqualsValueExpression, ConditionValueExpression)
         ) and isinstance(inner.value, SigmaExpansion):
             # Special case: Conditions containing a SigmaExpansion value convert into OR conditions
-            inner_class = ConditionOR
+            inner_class: Type[
+                ConditionItem
+                | CorrelationConditionItem
+                | ConditionFieldEqualsValueExpression
+                | ConditionValueExpression
+                | None
+            ] = ConditionOR
             try:
                 idx_inner = self.precedence.index(inner_class)
             except ValueError:

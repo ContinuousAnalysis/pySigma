@@ -186,7 +186,10 @@ class CorrelationConditionItem(ABC):
 
     @classmethod
     def from_parsed(
-        cls, s: str, l: int, t: Union[ParseResults, list]
+        cls,
+        s: str,
+        l: int,
+        t: Union[ParseResults, list[Union[SigmaRuleReference, "CorrelationConditionItem"]]],
     ) -> list["CorrelationConditionItem"]:
         """Create condition object from parse result."""
         if cls.arg_count == 1:
@@ -237,7 +240,7 @@ class SigmaExtendedCorrelationCondition:
     expression: str
     source: SigmaRuleLocation | None = field(default=None, compare=False)
     _parsed: Union[CorrelationConditionItem, SigmaRuleReference] = field(
-        init=False, repr=False, compare=False, default=None
+        init=False, repr=False, compare=False
     )
 
     def __post_init__(self: Self) -> None:
@@ -281,7 +284,7 @@ class SigmaExtendedCorrelationCondition:
         )
 
         result = expr.parse_string(expression, parse_all=True)
-        return result[0]
+        return cast(Union[CorrelationConditionItem, SigmaRuleReference], result[0])
 
     @property
     def parsed(self) -> Union[CorrelationConditionItem, SigmaRuleReference]:
@@ -613,7 +616,9 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
                         parsed = condition.parsed
                         rule_refs_from_condition = []
 
-                        def extract_refs(node):
+                        def extract_refs(
+                            node: Union[SigmaRuleReference, CorrelationConditionItem],
+                        ) -> None:
                             if isinstance(node, SigmaRuleReference):
                                 rule_refs_from_condition.append(node)
                             elif isinstance(node, CorrelationConditionItem):
