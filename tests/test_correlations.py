@@ -240,6 +240,21 @@ def test_correlation_without_rule_reference():
         )
 
 
+def test_correlation_without_rules_requires_extended_condition():
+    """Test that rules=None requires an extended correlation condition."""
+    with pytest.raises(
+        SigmaCorrelationRuleError,
+        match="Sigma correlation rule without rules list requires an extended correlation condition",
+    ):
+        SigmaCorrelationRule(
+            title="Invalid correlation",
+            type=SigmaCorrelationType.EVENT_COUNT,
+            rules=None,
+            timespan=SigmaCorrelationTimespan("10m"),
+            condition=SigmaCorrelationCondition(SigmaCorrelationConditionOperator.GTE, 10),
+        )
+
+
 def test_correlation_invalid_group_by():
     with pytest.raises(
         SigmaCorrelationRuleError,
@@ -875,6 +890,64 @@ def test_extended_condition_multiple_unreferenced_rules():
         )
 
 
+def test_extended_condition_undefined_rule_direct_constructor():
+    """Test that rules referenced in condition but not in rules list raise an error when using constructor directly."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    with pytest.raises(
+        SigmaCorrelationConditionError,
+        match="Rules referenced in extended condition but not defined in rules list: rule_c",
+    ):
+        SigmaCorrelationRule(
+            title="Undefined rule in condition",
+            type=SigmaCorrelationType.TEMPORAL,
+            rules=[SigmaRuleReference("rule_a"), SigmaRuleReference("rule_b")],
+            timespan=SigmaCorrelationTimespan("5m"),
+            group_by=["user"],
+            condition=SigmaExtendedCorrelationCondition("rule_a and rule_b and rule_c"),
+        )
+
+
+def test_extended_condition_multiple_undefined_rules_direct_constructor():
+    """Test error message when multiple rules referenced in condition are not defined using constructor."""
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    with pytest.raises(
+        SigmaCorrelationConditionError,
+        match="Rules referenced in extended condition but not defined in rules list: rule_c, rule_d",
+    ):
+        SigmaCorrelationRule(
+            title="Multiple undefined rules in condition",
+            type=SigmaCorrelationType.TEMPORAL,
+            rules=[SigmaRuleReference("rule_a"), SigmaRuleReference("rule_b")],
+            timespan=SigmaCorrelationTimespan("5m"),
+            group_by=["user"],
+            condition=SigmaExtendedCorrelationCondition("rule_a and (rule_b or rule_c) and rule_d"),
+        )
+
+
+def test_extended_condition_rules_match():
+    """Test successful case where rules list matches extended condition references."""
+    rule = SigmaCorrelationRule.from_dict(
+        {
+            "title": "Matching rules",
+            "correlation": {
+                "type": "temporal",
+                "rules": ["rule_a", "rule_b", "rule_c"],
+                "group-by": ["user"],
+                "timespan": "5m",
+                "condition": "rule_a and (rule_b or rule_c)",
+            },
+        }
+    )
+    from sigma.correlations import SigmaExtendedCorrelationCondition
+
+    assert isinstance(rule.condition, SigmaExtendedCorrelationCondition)
+    assert rule.condition.expression == "rule_a and (rule_b or rule_c)"
+    assert len(rule.rules) == 3
+    assert set(r.reference for r in rule.rules) == {"rule_a", "rule_b", "rule_c"}
+
+
 # Tests for SigmaExtendedCorrelationCondition parsing
 def test_extended_condition_parse_simple_identifier():
     """Test parsing a simple rule identifier."""
@@ -889,7 +962,7 @@ def test_extended_condition_parse_simple_identifier():
     # Simple identifier should be a SigmaRuleReference
     assert isinstance(cond._parsed, SigmaRuleReference)
     assert cond._parsed.reference == "rule_a"
-    assert cond.get_referenced_rules() == {"rule_a"}
+    assert set(cond.get_referenced_rules()) == {"rule_a"}
 
 
 def test_extended_condition_parse_basic_and():
@@ -910,7 +983,7 @@ def test_extended_condition_parse_basic_and():
     assert cond._parsed.args[0].reference == "rule_a"
     assert isinstance(cond._parsed.args[1], SigmaRuleReference)
     assert cond._parsed.args[1].reference == "rule_b"
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b"}
 
 
 def test_extended_condition_parse_basic_or():
@@ -931,7 +1004,7 @@ def test_extended_condition_parse_basic_or():
     assert cond._parsed.args[0].reference == "rule_a"
     assert isinstance(cond._parsed.args[1], SigmaRuleReference)
     assert cond._parsed.args[1].reference == "rule_b"
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b"}
 
 
 def test_extended_condition_parse_basic_not():
@@ -950,7 +1023,7 @@ def test_extended_condition_parse_basic_not():
     assert len(cond._parsed.args) == 1
     assert isinstance(cond._parsed.args[0], SigmaRuleReference)
     assert cond._parsed.args[0].reference == "rule_a"
-    assert cond.get_referenced_rules() == {"rule_a"}
+    assert set(cond.get_referenced_rules()) == {"rule_a"}
 
 
 def test_extended_condition_parse_multiple_and():
@@ -971,7 +1044,7 @@ def test_extended_condition_parse_multiple_and():
     assert cond._parsed.args[0].reference == "rule_a"
     assert cond._parsed.args[1].reference == "rule_b"
     assert cond._parsed.args[2].reference == "rule_c"
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b", "rule_c"}
 
 
 def test_extended_condition_parse_multiple_or():
@@ -992,7 +1065,7 @@ def test_extended_condition_parse_multiple_or():
     assert cond._parsed.args[0].reference == "rule_a"
     assert cond._parsed.args[1].reference == "rule_b"
     assert cond._parsed.args[2].reference == "rule_c"
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b", "rule_c"}
 
 
 def test_extended_condition_parse_precedence_and_or():
@@ -1018,7 +1091,7 @@ def test_extended_condition_parse_precedence_and_or():
     # Second arg is rule_c
     assert isinstance(cond._parsed.args[1], SigmaRuleReference)
     assert cond._parsed.args[1].reference == "rule_c"
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b", "rule_c"}
 
 
 def test_extended_condition_parse_precedence_or_and():
@@ -1044,7 +1117,7 @@ def test_extended_condition_parse_precedence_or_and():
     assert len(cond._parsed.args[1].args) == 2
     assert cond._parsed.args[1].args[0].reference == "rule_b"
     assert cond._parsed.args[1].args[1].reference == "rule_c"
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b", "rule_c"}
 
 
 def test_extended_condition_parse_precedence_not_and():
@@ -1070,7 +1143,7 @@ def test_extended_condition_parse_precedence_not_and():
     # Second arg is rule_b
     assert isinstance(cond._parsed.args[1], SigmaRuleReference)
     assert cond._parsed.args[1].reference == "rule_b"
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b"}
 
 
 def test_extended_condition_parse_parentheses_or_and():
@@ -1096,7 +1169,7 @@ def test_extended_condition_parse_parentheses_or_and():
     # Second arg is rule_c
     assert isinstance(cond._parsed.args[1], SigmaRuleReference)
     assert cond._parsed.args[1].reference == "rule_c"
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b", "rule_c"}
 
 
 def test_extended_condition_parse_parentheses_not():
@@ -1119,7 +1192,7 @@ def test_extended_condition_parse_parentheses_not():
     assert len(cond._parsed.args[0].args) == 2
     assert cond._parsed.args[0].args[0].reference == "rule_a"
     assert cond._parsed.args[0].args[1].reference == "rule_b"
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b"}
 
 
 def test_extended_condition_parse_complex_nested():
@@ -1152,7 +1225,7 @@ def test_extended_condition_parse_complex_nested():
     assert len(cond._parsed.args[1].args[0].args) == 2
     assert cond._parsed.args[1].args[0].args[0].reference == "rule_c"
     assert cond._parsed.args[1].args[0].args[1].reference == "rule_d"
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c", "rule_d"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b", "rule_c", "rule_d"}
 
 
 def test_extended_condition_parse_complex_mixed():
@@ -1170,7 +1243,7 @@ def test_extended_condition_parse_complex_mixed():
     assert cond._parsed is not None
     # Complex mixed expression should parse into proper tree structure
     assert isinstance(cond._parsed, CorrelationConditionItem)
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b", "rule_c", "rule_d"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b", "rule_c", "rule_d"}
 
 
 def test_extended_condition_parse_underscore_identifiers():
@@ -1185,7 +1258,7 @@ def test_extended_condition_parse_underscore_identifiers():
     assert cond._parsed is not None
     # Should parse into proper tree structure with underscore identifiers
     assert isinstance(cond._parsed, CorrelationConditionItem)
-    assert cond.get_referenced_rules() == {"rule_a_1", "rule_b_2", "rule_c_3"}
+    assert set(cond.get_referenced_rules()) == {"rule_a_1", "rule_b_2", "rule_c_3"}
 
 
 def test_extended_condition_parse_multiple_nots():
@@ -1213,7 +1286,7 @@ def test_extended_condition_parse_multiple_nots():
     assert len(cond._parsed.args[1].args) == 1
     assert isinstance(cond._parsed.args[1].args[0], SigmaRuleReference)
     assert cond._parsed.args[1].args[0].reference == "rule_b"
-    assert cond.get_referenced_rules() == {"rule_a", "rule_b"}
+    assert set(cond.get_referenced_rules()) == {"rule_a", "rule_b"}
 
 
 def test_extended_condition_parse_deeply_nested():
@@ -1232,7 +1305,7 @@ def test_extended_condition_parse_deeply_nested():
     assert cond._parsed is not None
     # Should parse into proper nested tree structure
     assert isinstance(cond._parsed, CorrelationConditionItem)
-    assert cond.get_referenced_rules() == {
+    assert set(cond.get_referenced_rules()) == {
         "rule_a",
         "rule_b",
         "rule_c",
@@ -1240,3 +1313,4 @@ def test_extended_condition_parse_deeply_nested():
         "rule_e",
         "rule_f",
     }
+

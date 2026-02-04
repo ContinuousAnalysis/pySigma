@@ -40,9 +40,6 @@ title: Failed and successful logons for a single user
 status: test
 correlation:
     type: temporal
-    rules:
-        - failed_logon
-        - successful_logon
     condition: failed_logon and successful_logon
     timespan: 5m
     group-by:
@@ -81,9 +78,6 @@ title: Either failed or suspicious logon for a single user
 status: test
 correlation:
     type: temporal
-    rules:
-        - failed_logon
-        - suspicious_logon
     condition: failed_logon or suspicious_logon
     timespan: 5m
     group-by:
@@ -122,9 +116,6 @@ title: Failed logon but not successful
 status: test
 correlation:
     type: temporal
-    rules:
-        - failed_logon
-        - successful_logon
     condition: failed_logon and not successful_logon
     timespan: 5m
     group-by:
@@ -185,11 +176,6 @@ title: Complex correlation condition
 status: test
 correlation:
     type: temporal
-    rules:
-        - failed_logon
-        - suspicious_logon
-        - successful_logon
-        - account_lockout
     condition: (failed_logon or suspicious_logon) and not (successful_logon or account_lockout)
     timespan: 5m
     group-by:
@@ -239,10 +225,6 @@ title: Failed then successful logon then admin action
 status: test
 correlation:
     type: temporal_ordered
-    rules:
-        - failed_logon
-        - successful_logon
-        - admin_action
     condition: failed_logon and successful_logon and admin_action
     timespan: 10m
     group-by:
@@ -363,10 +345,6 @@ title: Precedence test
 status: test
 correlation:
     type: temporal
-    rules:
-        - rule_a
-        - rule_b
-        - rule_c
     condition: rule_a or rule_b and rule_c
     timespan: 5m
         """
@@ -423,10 +401,6 @@ title: Parentheses test
 status: test
 correlation:
     type: temporal
-    rules:
-        - rule_a
-        - rule_b
-        - rule_c
     condition: (rule_a or rule_b) and rule_c
     timespan: 5m
         """
@@ -462,8 +436,6 @@ title: Double negation test
 status: test
 correlation:
     type: temporal
-    rules:
-        - rule_a
     condition: not not rule_a
     timespan: 5m
         """
