@@ -729,7 +729,7 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
         if self.rules is None and isinstance(self.condition, SigmaExtendedCorrelationCondition):
             referenced_rule_names = self.condition.get_referenced_rules()
             self.rules = [SigmaRuleReference(name) for name in referenced_rule_names]
-        
+
         if self.rules is not None:
             for rule_ref in self.rules:
                 rule_ref.resolve(rule_collection)

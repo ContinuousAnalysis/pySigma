@@ -1313,4 +1313,3 @@ def test_extended_condition_parse_deeply_nested():
         "rule_e",
         "rule_f",
     }
-
