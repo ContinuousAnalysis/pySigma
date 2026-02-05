@@ -2329,7 +2329,7 @@ class TextQueryBackend(Backend):
                     rule, correlation_type, method, search
                 ),
                 condition=self.convert_correlation_condition_from_template(
-                    rule.condition, rule.rules, correlation_type, method
+                    rule.condition, rule.referenced_rules, correlation_type, method
                 ),
                 groupby=self.convert_correlation_aggregation_groupby_from_template(
                     rule.group_by, method
@@ -2428,8 +2428,12 @@ class TextQueryBackend(Backend):
         **kwargs: dict[str, Any],
     ) -> str:
         if (  # if the correlation rule refers only a single rule and this rule results only in a single query
-            len(rule.rules) == 1
-            and len(queries := ((rule_reference := rule.rules[0]).rule).get_conversion_result())
+            len(rule.referenced_rules) == 1
+            and len(
+                queries := (
+                    (rule_reference := rule.referenced_rules[0]).rule
+                ).get_conversion_result()
+            )
             == 1
             and self.correlation_search_single_rule_expression is not None
         ):
@@ -2464,7 +2468,7 @@ class TextQueryBackend(Backend):
                                 rule_reference,
                             ),
                         )
-                        for rule_reference in rule.rules
+                        for rule_reference in rule.referenced_rules
                         for query in rule_reference.rule.get_conversion_result()
                     )
                 ),
@@ -2526,7 +2530,7 @@ class TextQueryBackend(Backend):
                             ruleid=rule_reference.rule.name or rule_reference.rule.id,
                             query=self.convert_correlation_typing_query_postprocess(query),
                         )
-                        for rule_reference in rule.rules
+                        for rule_reference in rule.referenced_rules
                         for query in rule_reference.rule.get_conversion_result()
                     )
                 )
@@ -2570,14 +2574,14 @@ class TextQueryBackend(Backend):
         template = templates[method]
         return template.format(
             rule=rule,
-            referenced_rules=self.convert_referenced_rules(rule.rules, method),
+            referenced_rules=self.convert_referenced_rules(rule.referenced_rules, method),
             field=(
                 rule.condition.fieldref
                 if isinstance(rule.condition, SigmaCorrelationCondition)
                 else ""
             ),
             fields=self.convert_correlation_aggregation_fields_from_template(
-                rule.fields, rule.rules, rule.group_by, method
+                rule.fields, rule.referenced_rules, rule.group_by, method
             ),
             timespan=self.convert_timespan(rule.timespan, method),
             groupby=self.convert_correlation_aggregation_groupby_from_template(

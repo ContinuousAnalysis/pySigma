@@ -439,6 +439,9 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
     condition: SigmaCorrelationCondition | SigmaExtendedCorrelationCondition = field(
         default_factory=lambda: SigmaCorrelationCondition(SigmaCorrelationConditionOperator.GTE, 1)
     )
+    referenced_rules: list[SigmaRuleReference] = field(
+        default_factory=list, init=False, repr=False, compare=False
+    )
     source: SigmaRuleLocation | None = field(default=None, compare=False)
 
     def __post_init__(self: Self) -> None:
@@ -541,7 +544,7 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
 
         # Rules
         rules_value = correlation_rule.get("rules")
-        rules = []  # Initialize to empty list
+        rules: list[SigmaRuleReference] | None = []  # Initialize to empty list
         if rules_value is not None:
             if isinstance(rules_value, str):
                 # Simple rule reference
@@ -670,15 +673,20 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
         ):
             # For temporal types without condition, set default
             # default condition for temporal correlation rules: count >= number of rules
+            rules_count = len(rules) if rules is not None else 0
             condition = SigmaCorrelationCondition(
-                op=SigmaCorrelationConditionOperator.GTE, count=len(rules), source=source
+                op=SigmaCorrelationConditionOperator.GTE, count=rules_count, source=source
             )
 
         if not collect_errors and errors:
             raise errors[0]
 
         # Convert empty rules list to None if using extended condition
-        if len(rules) == 0 and isinstance(condition, SigmaExtendedCorrelationCondition):
+        if (
+            rules is not None
+            and not rules
+            and isinstance(condition, SigmaExtendedCorrelationCondition)
+        ):
             rules = None
 
         return cls(
@@ -719,26 +727,28 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
     def resolve_rule_references(self: Self, rule_collection: SigmaCollection) -> None:
         """
         Resolves all rule references in the rules property to actual Sigma rules.
-        If rules is None and an extended condition is defined, extracts and resolves
-        rule references from the condition.
+        If rules is None and an extended condition is defined, extracts rule references
+        from the condition. Populates the referenced_rules list with resolved references.
 
         Raises:
             sigma_exceptions.SigmaRuleNotFoundError: If a referenced rule cannot be found in the given rule collection.
         """
-        # If rules is None but we have an extended condition, extract rules from it
-        if self.rules is None and isinstance(self.condition, SigmaExtendedCorrelationCondition):
-            referenced_rule_names = self.condition.get_referenced_rules()
-            self.rules = [SigmaRuleReference(name) for name in referenced_rule_names]
-
+        # Determine which rules to use: explicit rules or extracted from extended condition
         if self.rules is not None:
-            for rule_ref in self.rules:
-                rule_ref.resolve(rule_collection)
-                rule = rule_ref.rule
-                rule.add_backreference(self)
-                if not self.generate:
-                    rule.disable_output()
+            self.referenced_rules = self.rules
+        elif isinstance(self.condition, SigmaExtendedCorrelationCondition):
+            referenced_rule_names = self.condition.get_referenced_rules()
+            self.referenced_rules = [SigmaRuleReference(name) for name in referenced_rule_names]
+        else:
+            self.referenced_rules = []
 
-        self.aliases.resolve_rule_references(rule_collection)
+        # Resolve all rule references
+        for rule_ref in self.referenced_rules:
+            rule_ref.resolve(rule_collection)
+            rule = rule_ref.rule
+            rule.add_backreference(self)
+            if not self.generate:
+                rule.disable_output()
 
     def flatten_rules(
         self: Self, include_correlations: bool = True
@@ -751,13 +761,12 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
             List of Sigma rules.
         """
         rules: list[SigmaRule | SigmaCorrelationRule] = []
-        if self.rules is not None:
-            for rule_ref in self.rules:
-                rule = rule_ref.rule
-                if isinstance(rule, SigmaCorrelationRule):
-                    if include_correlations:
-                        rules.append(rule)
-                    rules.extend(rule.flatten_rules())
-                else:
+        for rule_ref in self.referenced_rules:
+            rule = rule_ref.rule
+            if isinstance(rule, SigmaCorrelationRule):
+                if include_correlations:
                     rules.append(rule)
+                rules.extend(rule.flatten_rules())
+            else:
+                rules.append(rule)
         return rules
