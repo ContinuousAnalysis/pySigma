@@ -913,8 +913,8 @@ class SigmaCIDRExpression(NoPlainConversionMixin, SigmaType):
                     patterns.append(
                         str(subnet_v6)[:i] + wildcard
                     )  # Generate pattern by cutting of at first difference
-                else:  # The /128 case - no differences
-                    patterns.append(str(subnet_v6))  # Return the single address
+                else:  # The /128 case - single address, use network_address not network (avoid "::1/128" literal)
+                    patterns.append(str(subnet_v6.network_address))
         return patterns
 
 
