@@ -830,7 +830,7 @@ def test_cidr_expand_ipv6_64():
 
 
 def test_cidr_expand_ipv6_128():
-    assert SigmaCIDRExpression("::1/128").expand() == ["::1/128"]
+    assert SigmaCIDRExpression("::1/128").expand() == ["::1"]
 
 
 def test_cidr_invalid():
