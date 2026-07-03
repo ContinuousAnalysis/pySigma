@@ -48,6 +48,7 @@ class HashesFieldsDetectionItemTransformation(DetectionItemTransformation):
         valid_hash_algos (list[str]): List of supported hash algorithms.
         field_prefix (str): Prefix to add to the new field names.
         drop_algo_prefix (bool): If True, omits the algorithm name from the new field name.
+        field_to_parse (list[str]): List of field names to parse for hash values. Defaults to ["Hashes", "Hash"].
         hash_lengths (dict[int, str]): Mapping of hash lengths to their corresponding algorithms.
 
     Example:
@@ -63,6 +64,7 @@ class HashesFieldsDetectionItemTransformation(DetectionItemTransformation):
     valid_hash_algos: list[str]
     field_prefix: str = ""
     drop_algo_prefix: bool = False
+    field_to_parse: list[str] = field(default_factory=lambda: ["Hashes", "Hash"])
     hash_lengths: ClassVar[dict[int, str]] = {32: "MD5", 40: "SHA1", 64: "SHA256", 128: "SHA512"}
 
     def apply_detection_item(
@@ -81,6 +83,8 @@ class HashesFieldsDetectionItemTransformation(DetectionItemTransformation):
         Raises:
             Exception: If no valid hash algorithms were found in the detection item.
         """
+        if detection_item.field not in self.field_to_parse:
+            return None
         if (
             isinstance(detection_item.value, SigmaString)
             or isinstance(detection_item.value, list)
@@ -134,8 +138,9 @@ class HashesFieldsDetectionItemTransformation(DetectionItemTransformation):
         if len(parts) == 2:
             hash_algo, hash_value = parts
             hash_algo = hash_algo.lstrip("*").upper()
+            hash_value = hash_value.strip("*?")
         else:
-            hash_value = parts[0]
+            hash_value = parts[0].strip("*?")
             hash_algo = self._determine_hash_algo_by_length(hash_value)
 
         return (hash_algo, hash_value) if hash_algo in self.valid_hash_algos else ("", hash_value)
