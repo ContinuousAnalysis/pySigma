@@ -2616,6 +2616,32 @@ def test_hashes_transformation_no_string_value(hashes_transformation):
     assert hashes_transformation.apply_detection_item(detection_item) is None
 
 
+def test_hashes_transformation_wildcard_wrapped_explicit(hashes_transformation):
+    detection_item = SigmaDetectionItem(
+        "Hashes", [], [SigmaString("*SHA1=5F1CBC3D99558307BC1250D084FA968521482025*")]
+    )
+    result = hashes_transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 1
+    assert result.detection_items[0].field == "FileSHA1"
+    assert result.detection_items[0].value == [
+        SigmaString("5F1CBC3D99558307BC1250D084FA968521482025")
+    ]
+
+
+def test_hashes_transformation_wildcard_wrapped_auto_detect(hashes_transformation):
+    detection_item = SigmaDetectionItem(
+        "Hashes", [], [SigmaString("*5F1CBC3D99558307BC1250D084FA968521482025*")]
+    )
+    result = hashes_transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 1
+    assert result.detection_items[0].field == "FileSHA1"
+    assert result.detection_items[0].value == [
+        SigmaString("5F1CBC3D99558307BC1250D084FA968521482025")
+    ]
+
+
 def test_case_transformation_lower(dummy_pipeline):
     detection_item = SigmaDetectionItem("field", [], [SigmaString("AbC")])
     transformation = CaseTransformation(method="lower")
