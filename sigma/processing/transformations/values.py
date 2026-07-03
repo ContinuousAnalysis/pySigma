@@ -1,5 +1,5 @@
 from collections import defaultdict
-from sigma.conditions import ConditionOR
+from sigma.conditions import ConditionAND, ConditionOR
 from typing import (
     ClassVar,
     Literal,
@@ -443,3 +443,127 @@ class CaseTransformation(StringValueTransformation):
             return val.lower()
         else:
             return val.upper()
+
+
+@dataclass
+class GenericTypeValueTransformation(DetectionItemTransformation):
+    """
+    Transforms values matching a regex pattern with named groups into separate detection items.
+
+    Extracts named capture groups from a regex match and creates one detection item per group.
+    Each item uses the field prefix followed by the group name:
+    - {field_prefix}.{group_name}: captured value
+
+    Example:
+        regex = r"(?P<type>Dword):(?P<valeur>[0-9]+)"
+        field_prefix = "reg"
+        Input:  reg: "Dword:00001"
+        Output: reg.type: "Dword", reg.valeur: "00001"
+
+    The regex pattern must contain at least one named group. Groups without names are ignored.
+
+    Type conversion for captured values:
+    - "null", "none", or empty string -> SigmaNull
+    - Integer strings (without leading zeros, except "0") -> SigmaNumber(int)
+    - Float strings (without leading zeros) -> SigmaNumber(float)
+    - All other strings -> SigmaString
+
+    Strings with leading zeros (e.g., "00001") are preserved as SigmaString to avoid
+    losing the leading zero information.
+
+    Attributes:
+        regex (str): Regex pattern with named groups (e.g., (?P<name>pattern)).
+            Default: r"(?P<type>[?A-Za-z0-9_]+):(?P<value>[^\\s=|]+)"
+        field_prefix (str): Prefix for field names. Used as {field_prefix}.{group_name}.
+    """
+
+    regex: str = r"(?P<type>[?A-Za-z0-9_]+):(?P<value>[^\s=|]+)"
+    field_prefix: str = ""
+
+    def __post_init__(self) -> None:
+        if hasattr(super(), '__post_init__'):
+            super().__post_init__()
+        try:
+            self.re = re.compile(self.regex)
+        except re.error as e:
+            raise SigmaRegularExpressionError(
+                f"Regular expression '{self.regex}' is invalid: {str(e)}"
+            ) from e
+        
+        # Validate that regex has at least one named group
+        if not self.re.groupindex:
+            raise SigmaRegularExpressionError(
+                f"Regular expression '{self.regex}' must contain at least one named group"
+            )
+
+    def _convert_value(self, value: str) -> SigmaType:
+        """
+        Convert a string value to the appropriate SigmaType.
+
+        Args:
+            value (str): The string value to convert.
+
+        Returns:
+            SigmaType: The converted value (SigmaNumber, SigmaString, or SigmaNull).
+        """
+        if value.lower() in ("null", "none", ""):
+            return SigmaNull()
+        # Don't convert strings with leading zeros (except "0" alone)
+        if value != "0" and value.startswith("0") and value[1:].isdigit():
+            return SigmaString(value)
+        try:
+            return SigmaNumber(int(value))
+        except ValueError:
+            try:
+                return SigmaNumber(float(value))
+            except ValueError:
+                return SigmaString(value)
+
+    def apply_detection_item(
+        self, detection_item: SigmaDetectionItem
+    ) -> (SigmaDetection | None):
+        """
+        Applies the transformation to detection items whose values match the regex pattern.
+
+        Extracts named capture groups from the regex match and creates one detection item
+        per named group. Each item uses the format: {field_prefix}.{group_name}.
+
+        Args:
+            detection_item (SigmaDetectionItem): The detection item to transform.
+
+        Returns:
+            SigmaDetection | None: A new SigmaDetection with matched items,
+                or None if no values match the pattern.
+        """
+        if not self.field_prefix:
+            return None
+
+        if not isinstance(detection_item.value, list) or not all(
+            isinstance(v, SigmaString) for v in detection_item.value
+        ):
+            return None
+
+        new_items = []
+
+        for val in detection_item.value:
+            plain = val.to_plain()
+            if match := self.re.match(plain):
+                # Create one item per named group
+                for group_name, group_value in match.groupdict().items():
+                    if group_value is None or group_value == "":
+                        continue
+                    
+                    new_items.append(
+                        SigmaDetectionItem(
+                            field=f"{self.field_prefix}.{group_name}",
+                            modifiers=[],
+                            value=[self._convert_value(group_value)],
+                        )
+                    )
+
+        if new_items:
+            return SigmaDetection(
+                detection_items=new_items,
+                item_linking=ConditionAND,
+            )
+        return None

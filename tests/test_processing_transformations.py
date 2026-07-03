@@ -7,7 +7,7 @@ import pytest
 import sigma.processing.transformations as transformations_module
 from sigma.backends.test import TextQueryTestBackend
 from sigma.collection import SigmaCollection
-from sigma.conditions import ConditionOR, SigmaCondition
+from sigma.conditions import ConditionAND, ConditionOR, SigmaCondition
 from sigma.correlations import (
     SigmaCorrelationFieldAlias,
     SigmaCorrelationFieldAliases,
@@ -2912,3 +2912,174 @@ def test_strict_mapped_fields_no_pipeline():
         """)
     with pytest.raises(SigmaTransformationError, match="Pipeline is not set"):
         transformation.apply(rule)
+
+
+def test_generic_type_value_transformation_single():
+    """Test GenericTypeValueTransformation with named groups."""
+    transformation = GenericTypeValueTransformation(field_prefix="reg")
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("Dword:00001")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 2
+    assert result.detection_items[0].field == "reg.type"
+    assert result.detection_items[0].value == [SigmaString("Dword")]
+    assert result.detection_items[1].field == "reg.value"
+    assert result.detection_items[1].value == [SigmaString("00001")]
+    assert result.item_linking == ConditionAND
+
+
+def test_generic_type_value_transformation_custom_named_groups():
+    """Test GenericTypeValueTransformation with custom named groups."""
+    transformation = GenericTypeValueTransformation(
+        regex=r"(?P<operation>Read|Write):(?P<path>.+)",
+        field_prefix="file_event"
+    )
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("Read:C:\\Windows\\System32\\cmd.exe")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 2
+    assert result.detection_items[0].field == "file_event.operation"
+    assert result.detection_items[0].value == [SigmaString("Read")]
+    assert result.detection_items[1].field == "file_event.path"
+    assert result.detection_items[1].value == [SigmaString("C:\\Windows\\System32\\cmd.exe")]
+
+
+def test_generic_type_value_transformation_no_match():
+    """Test GenericTypeValueTransformation with no match returns None."""
+    transformation = GenericTypeValueTransformation(field_prefix="reg")
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("NormalValue")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert result is None
+
+
+def test_generic_type_value_transformation_multiple_values():
+    """Test GenericTypeValueTransformation with multiple values."""
+    transformation = GenericTypeValueTransformation(field_prefix="reg")
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("Dword:1"), SigmaString("Qword:2")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 4  # 2 values * 2 groups each
+    # First value: Dword:1
+    assert result.detection_items[0].field == "reg.type"
+    assert result.detection_items[0].value == [SigmaString("Dword")]
+    assert result.detection_items[1].field == "reg.value"
+    assert result.detection_items[1].value == [SigmaNumber(1)]
+    # Second value: Qword:2
+    assert result.detection_items[2].field == "reg.type"
+    assert result.detection_items[2].value == [SigmaString("Qword")]
+    assert result.detection_items[3].field == "reg.value"
+    assert result.detection_items[3].value == [SigmaNumber(2)]
+    assert result.item_linking == ConditionAND
+
+
+def test_generic_type_value_transformation_invalid_regex():
+    """Test GenericTypeValueTransformation with invalid regex raises error."""
+    with pytest.raises(SigmaRegularExpressionError):
+        GenericTypeValueTransformation(regex=r"[invalid")
+
+
+def test_generic_type_value_transformation_no_named_groups():
+    """Test GenericTypeValueTransformation raises error if regex has no named groups."""
+    with pytest.raises(SigmaRegularExpressionError, match="must contain at least one named group"):
+        GenericTypeValueTransformation(regex=r"^([A-Za-z]+):([0-9]+)$")
+
+
+def test_generic_type_value_transformation_empty_field_prefix():
+    """Test GenericTypeValueTransformation returns None if field_prefix is empty."""
+    transformation = GenericTypeValueTransformation(field_prefix="")
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("Dword:00001")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert result is None
+
+
+def test_generic_type_value_transformation_null_value():
+    """Test GenericTypeValueTransformation with null value."""
+    transformation = GenericTypeValueTransformation(field_prefix="reg")
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("Key:null")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 2
+    assert result.detection_items[0].field == "reg.type"
+    assert result.detection_items[0].value == [SigmaString("Key")]
+    assert result.detection_items[1].field == "reg.value"
+    assert isinstance(result.detection_items[1].value[0], SigmaNull)
+
+
+def test_generic_type_value_transformation_number_value():
+    """Test GenericTypeValueTransformation with number value."""
+    transformation = GenericTypeValueTransformation(field_prefix="reg")
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("Key:42")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 2
+    assert result.detection_items[0].field == "reg.type"
+    assert result.detection_items[0].value == [SigmaString("Key")]
+    assert result.detection_items[1].field == "reg.value"
+    assert isinstance(result.detection_items[1].value[0], SigmaNumber)
+    assert result.detection_items[1].value[0].number == 42
+
+
+def test_generic_type_value_transformation_float_value():
+    """Test GenericTypeValueTransformation with float value."""
+    transformation = GenericTypeValueTransformation(field_prefix="reg")
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("Key:3.14")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 2
+    assert result.detection_items[0].field == "reg.type"
+    assert result.detection_items[0].value == [SigmaString("Key")]
+    assert result.detection_items[1].field == "reg.value"
+    assert isinstance(result.detection_items[1].value[0], SigmaNumber)
+    assert result.detection_items[1].value[0].number == 3.14
+
+
+def test_generic_type_value_transformation_three_named_groups():
+    """Test GenericTypeValueTransformation with three named groups."""
+    transformation = GenericTypeValueTransformation(
+        regex=r"(?P<protocol>http|https)://(?P<host>[^/]+)(?P<path>/[^?#]*)?",
+        field_prefix="url"
+    )
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("https://example.com/path/to/resource")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 3
+    assert result.detection_items[0].field == "url.protocol"
+    assert result.detection_items[0].value == [SigmaString("https")]
+    assert result.detection_items[1].field == "url.host"
+    assert result.detection_items[1].value == [SigmaString("example.com")]
+    assert result.detection_items[2].field == "url.path"
+    assert result.detection_items[2].value == [SigmaString("/path/to/resource")]
+
+
+def test_generic_type_value_transformation_mixed_named_unnamed_groups():
+    """Test GenericTypeValueTransformation with mixed named and unnamed groups."""
+    transformation = GenericTypeValueTransformation(
+        regex=r"(?P<type>[A-Za-z]+):(.+)",  # Second group is unnamed, will be ignored
+        field_prefix="reg"
+    )
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("Dword:00001")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 1  # Only named group is used
+    assert result.detection_items[0].field == "reg.type"
+    assert result.detection_items[0].value == [SigmaString("Dword")]
