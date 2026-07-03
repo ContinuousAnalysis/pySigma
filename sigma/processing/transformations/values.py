@@ -455,7 +455,7 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
     - {field_prefix}.{group_name}: captured value
 
     Example:
-        regex = r"(?P<type>Dword):(?P<valeur>[0-9]+)"
+        regex = r"(?P<type>[A-Za-z]+):(?P<valeur>[0-9]+)"
         field_prefix = "reg"
         Input:  reg: "Dword:00001"
         Output: reg.type: "Dword", reg.valeur: "00001"
@@ -477,7 +477,7 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
         field_prefix (str): Prefix for field names. Used as {field_prefix}.{group_name}.
     """
 
-    regex: str = r"(?P<type>[?A-Za-z0-9_]+):(?P<value>[^\s=|]+)"
+    regex: str = r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)"
     field_prefix: str = ""
 
     def __post_init__(self) -> None:
@@ -521,7 +521,7 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
 
     def apply_detection_item(
         self, detection_item: SigmaDetectionItem
-    ) -> (SigmaDetection | None):
+    ) -> SigmaDetection | None:
         """
         Applies the transformation to detection items whose values match the regex pattern.
 
