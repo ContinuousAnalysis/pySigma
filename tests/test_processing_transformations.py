@@ -3083,3 +3083,33 @@ def test_generic_type_value_transformation_mixed_named_unnamed_groups():
     assert len(result.detection_items) == 1  # Only named group is used
     assert result.detection_items[0].field == "reg.type"
     assert result.detection_items[0].value == [SigmaString("Dword")]
+
+
+def test_generic_type_value_transformation_empty_domain():
+    """Test GenericTypeValueTransformation with empty domain (edge case)."""
+    transformation = GenericTypeValueTransformation(
+        regex=r"(?P<domain>[^\\]*)\\(?P<username>.+)",
+        field_prefix="user"
+    )
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("\\john.doe")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 1
+    assert result.detection_items[0].field == "user.username"
+    assert result.detection_items[0].value == [SigmaString("john.doe")]
+
+
+def test_generic_type_value_transformation_and_condition():
+    """Test that extracted items are in a SigmaDetection with AND condition."""
+    transformation = GenericTypeValueTransformation(
+        field_prefix="reg"
+    )
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("Dword:00001")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert result.item_linking == ConditionAND
+    assert len(result.detection_items) == 2
