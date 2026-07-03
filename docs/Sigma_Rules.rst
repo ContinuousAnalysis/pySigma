@@ -4,11 +4,26 @@ Sigma Rules
 This documentation page describes the parsing of Sigma rules and working with Sigma objects
 resulting from parsed rules.
 
-Parsing
-*******
+What are Sigma Rules?
+*********************
 
-Programatic Construction
-************************
+Sigma is a generic, open-ended, and extensible signature format for detection rules. Learn more on
+the `official Sigma website <https://sigmahq.io>`_.
+
+A minimal Sigma rule looks like this:
+
+.. code-block:: yaml
+
+   title: Suspicious Command Line
+   id: 5013332f-8a70-4e04-bcc1-06a98a2cca2e
+   status: test
+   logsource:
+       category: process_creation
+       product: windows
+   detection:
+       selection:
+           CommandLine|startswith: 'cmd.exe /c'
+       condition: selection
 
 Rule Collections
 ****************

@@ -2,15 +2,32 @@ pySigma Documentation
 #####################
 
 .. toctree::
-   :maxdepth: 1
-   :caption: Contents:
+   :hidden:
+   :caption: Getting Started
+
+   Quickstart
+   YAML_Pipeline_Tutorial
+
+.. toctree::
+   :hidden:
+   :caption: Core Concepts
 
    Sigma_Rules
    Processing_Pipelines
    Backends
+   Transformation_Cheat_Sheet
+   Conditions_Guide
    Rule_Validation
+
+.. toctree::
+   :hidden:
+   :caption: Advanced
+
+   Backend_Development
+   Transformation_Development
    Plugin_System
    Breaking_Changes
+   Changelog
 
 Overview
 ********
@@ -98,17 +115,9 @@ The following example::
    rules = SigmaCollection.from_yaml(sigma_rule_yaml)
    print("Result: " + "\n".join(backend.convert(rules)))
 
-* Utilizes the :`Sysmon pipeline package <https://github.com/SigmaHQ/pySigma-pipeline-sysmon>`_ that can be installed
-  with pip.
+* Utilizes the Sysmon pipeline package that can be installed with pip.
 * instantiates a Splunk backend.
 * Converts a Sigma rule collection into a list of queries and prints it.
 
 Details about the conversion process can be found :doc:`here <Backends>`. Processing pipelines are
 described on :doc:`this page <Processing_Pipelines>`.
-
-Indices and tables
-******************
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
