@@ -475,10 +475,12 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
         regex (str): Regex pattern with named groups (e.g., (?P<name>pattern)).
             Default: r"(?P<type>[?A-Za-z0-9_]+):(?P<value>[^\\s=|]+)"
         field_prefix (str): Prefix for field names. Used as {field_prefix}.{group_name}.
+        field_to_parse (list[str] | None): List of field names to parse. If None, all fields are parsed.
     """
 
     regex: str = r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)"
     field_prefix: str = ""
+    field_to_parse: list[str] | None = None
 
     def __post_init__(self) -> None:
         if hasattr(super(), "__post_init__"):
@@ -551,6 +553,10 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
                 or None if no values match the pattern.
         """
         if not self.field_prefix:
+            return None
+
+        # Filter by field_to_parse if specified
+        if self.field_to_parse is not None and detection_item.field not in self.field_to_parse:
             return None
 
         if not isinstance(detection_item.value, list) or not all(

@@ -3096,3 +3096,37 @@ def test_generic_type_value_transformation_and_condition():
     assert isinstance(result, SigmaDetection)
     assert result.item_linking == ConditionAND
     assert len(result.detection_items) == 2
+
+
+def test_generic_type_value_transformation_field_to_parse():
+    """Test GenericTypeValueTransformation with field_to_parse filter."""
+    transformation = GenericTypeValueTransformation(field_prefix="reg", field_to_parse=["reg"])
+    detection_item = SigmaDetectionItem("reg", [], [SigmaString("Dword:00001")])
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 2
+
+
+def test_generic_type_value_transformation_field_to_parse_wrong_field():
+    """Test GenericTypeValueTransformation returns None for wrong field."""
+    transformation = GenericTypeValueTransformation(field_prefix="reg", field_to_parse=["reg"])
+    detection_item = SigmaDetectionItem("other_field", [], [SigmaString("Dword:00001")])
+    result = transformation.apply_detection_item(detection_item)
+    assert result is None
+
+
+def test_generic_type_value_transformation_field_to_parse_none():
+    """Test GenericTypeValueTransformation with field_to_parse=None parses all fields."""
+    transformation = GenericTypeValueTransformation(field_prefix="reg", field_to_parse=None)
+    detection_item = SigmaDetectionItem("any_field", [], [SigmaString("Dword:00001")])
+    result = transformation.apply_detection_item(detection_item)
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 2
+
+
+def test_generic_type_value_transformation_field_to_parse_empty():
+    """Test GenericTypeValueTransformation with empty field_to_parse returns None."""
+    transformation = GenericTypeValueTransformation(field_prefix="reg", field_to_parse=[])
+    detection_item = SigmaDetectionItem("reg", [], [SigmaString("Dword:00001")])
+    result = transformation.apply_detection_item(detection_item)
+    assert result is None
