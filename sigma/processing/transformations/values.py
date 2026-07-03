@@ -481,9 +481,9 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
     field_prefix: str = ""
 
     def __post_init__(self) -> None:
-        if hasattr(super(), '__post_init__'):
-            super().__post_init__()
-        
+        if hasattr(super(), "__post_init__"):
+            super().__post_init__()  # type: ignore[misc]
+
         # Validate regex syntax
         try:
             self.re = re.compile(self.regex)
@@ -491,20 +491,20 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
             raise SigmaRegularExpressionError(
                 f"Regular expression '{self.regex}' is invalid: {str(e)}"
             ) from e
-        
+
         # Validate that regex has at least one named group
         if not self.re.groupindex:
             raise SigmaRegularExpressionError(
                 f"Regular expression '{self.regex}' must contain at least one named group"
             )
-        
+
         # Validate no duplicate named groups
         group_names = list(self.re.groupindex.keys())
         if len(group_names) != len(set(group_names)):
             raise SigmaRegularExpressionError(
                 f"Regular expression '{self.regex}' contains duplicate named groups"
             )
-        
+
         # Validate regex can match at least an empty string or simple pattern
         try:
             self.re.match("")
@@ -536,9 +536,7 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
             except ValueError:
                 return SigmaString(value)
 
-    def apply_detection_item(
-        self, detection_item: SigmaDetectionItem
-    ) -> SigmaDetection | None:
+    def apply_detection_item(self, detection_item: SigmaDetectionItem) -> SigmaDetection | None:
         """
         Applies the transformation to detection items whose values match the regex pattern.
 
@@ -560,7 +558,7 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
         ):
             return None
 
-        new_items = []
+        new_items: list[SigmaDetectionItem | SigmaDetection] = []
 
         for val in detection_item.value:
             plain = val.to_plain()
@@ -569,7 +567,7 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
                 for group_name, group_value in match.groupdict().items():
                     if group_value is None or group_value == "":
                         continue
-                    
+
                     new_items.append(
                         SigmaDetectionItem(
                             field=f"{self.field_prefix}.{group_name}",

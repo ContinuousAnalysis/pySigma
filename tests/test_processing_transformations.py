@@ -2917,9 +2917,7 @@ def test_strict_mapped_fields_no_pipeline():
 def test_generic_type_value_transformation_single():
     """Test GenericTypeValueTransformation with named groups."""
     transformation = GenericTypeValueTransformation(field_prefix="reg")
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("Dword:00001")]
-    )
+    detection_item = SigmaDetectionItem("anything", [], [SigmaString("Dword:00001")])
     result = transformation.apply_detection_item(detection_item)
     assert isinstance(result, SigmaDetection)
     assert len(result.detection_items) == 2
@@ -2933,8 +2931,7 @@ def test_generic_type_value_transformation_single():
 def test_generic_type_value_transformation_custom_named_groups():
     """Test GenericTypeValueTransformation with custom named groups."""
     transformation = GenericTypeValueTransformation(
-        regex=r"(?P<operation>Read|Write):(?P<path>.+)",
-        field_prefix="file_event"
+        regex=r"(?P<operation>Read|Write):(?P<path>.+)", field_prefix="file_event"
     )
     detection_item = SigmaDetectionItem(
         "anything", [], [SigmaString("Read:C:\\Windows\\System32\\cmd.exe")]
@@ -2951,9 +2948,7 @@ def test_generic_type_value_transformation_custom_named_groups():
 def test_generic_type_value_transformation_no_match():
     """Test GenericTypeValueTransformation with no match returns None."""
     transformation = GenericTypeValueTransformation(field_prefix="reg")
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("NormalValue")]
-    )
+    detection_item = SigmaDetectionItem("anything", [], [SigmaString("NormalValue")])
     result = transformation.apply_detection_item(detection_item)
     assert result is None
 
@@ -3001,9 +2996,7 @@ def test_generic_type_value_transformation_duplicate_named_groups():
 def test_generic_type_value_transformation_empty_field_prefix():
     """Test GenericTypeValueTransformation returns None if field_prefix is empty."""
     transformation = GenericTypeValueTransformation(field_prefix="")
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("Dword:00001")]
-    )
+    detection_item = SigmaDetectionItem("anything", [], [SigmaString("Dword:00001")])
     result = transformation.apply_detection_item(detection_item)
     assert result is None
 
@@ -3011,9 +3004,7 @@ def test_generic_type_value_transformation_empty_field_prefix():
 def test_generic_type_value_transformation_null_value():
     """Test GenericTypeValueTransformation with null value."""
     transformation = GenericTypeValueTransformation(field_prefix="reg")
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("Key:null")]
-    )
+    detection_item = SigmaDetectionItem("anything", [], [SigmaString("Key:null")])
     result = transformation.apply_detection_item(detection_item)
     assert isinstance(result, SigmaDetection)
     assert len(result.detection_items) == 2
@@ -3026,9 +3017,7 @@ def test_generic_type_value_transformation_null_value():
 def test_generic_type_value_transformation_number_value():
     """Test GenericTypeValueTransformation with number value."""
     transformation = GenericTypeValueTransformation(field_prefix="reg")
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("Key:42")]
-    )
+    detection_item = SigmaDetectionItem("anything", [], [SigmaString("Key:42")])
     result = transformation.apply_detection_item(detection_item)
     assert isinstance(result, SigmaDetection)
     assert len(result.detection_items) == 2
@@ -3042,9 +3031,7 @@ def test_generic_type_value_transformation_number_value():
 def test_generic_type_value_transformation_float_value():
     """Test GenericTypeValueTransformation with float value."""
     transformation = GenericTypeValueTransformation(field_prefix="reg")
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("Key:3.14")]
-    )
+    detection_item = SigmaDetectionItem("anything", [], [SigmaString("Key:3.14")])
     result = transformation.apply_detection_item(detection_item)
     assert isinstance(result, SigmaDetection)
     assert len(result.detection_items) == 2
@@ -3058,8 +3045,7 @@ def test_generic_type_value_transformation_float_value():
 def test_generic_type_value_transformation_three_named_groups():
     """Test GenericTypeValueTransformation with three named groups."""
     transformation = GenericTypeValueTransformation(
-        regex=r"(?P<protocol>http|https)://(?P<host>[^/]+)(?P<path>/[^?#]*)?",
-        field_prefix="url"
+        regex=r"(?P<protocol>http|https)://(?P<host>[^/]+)(?P<path>/[^?#]*)?", field_prefix="url"
     )
     detection_item = SigmaDetectionItem(
         "anything", [], [SigmaString("https://example.com/path/to/resource")]
@@ -3079,11 +3065,9 @@ def test_generic_type_value_transformation_mixed_named_unnamed_groups():
     """Test GenericTypeValueTransformation with mixed named and unnamed groups."""
     transformation = GenericTypeValueTransformation(
         regex=r"(?P<type>[A-Za-z]+):(.+)",  # Second group is unnamed, will be ignored
-        field_prefix="reg"
+        field_prefix="reg",
     )
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("Dword:00001")]
-    )
+    detection_item = SigmaDetectionItem("anything", [], [SigmaString("Dword:00001")])
     result = transformation.apply_detection_item(detection_item)
     assert isinstance(result, SigmaDetection)
     assert len(result.detection_items) == 1  # Only named group is used
@@ -3094,12 +3078,9 @@ def test_generic_type_value_transformation_mixed_named_unnamed_groups():
 def test_generic_type_value_transformation_empty_domain():
     """Test GenericTypeValueTransformation with empty domain (edge case)."""
     transformation = GenericTypeValueTransformation(
-        regex=r"(?P<domain>[^\\]*)\\(?P<username>.+)",
-        field_prefix="user"
+        regex=r"(?P<domain>[^\\]*)\\(?P<username>.+)", field_prefix="user"
     )
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("\\john.doe")]
-    )
+    detection_item = SigmaDetectionItem("anything", [], [SigmaString("\\john.doe")])
     result = transformation.apply_detection_item(detection_item)
     assert isinstance(result, SigmaDetection)
     assert len(result.detection_items) == 1
@@ -3109,12 +3090,8 @@ def test_generic_type_value_transformation_empty_domain():
 
 def test_generic_type_value_transformation_and_condition():
     """Test that extracted items are in a SigmaDetection with AND condition."""
-    transformation = GenericTypeValueTransformation(
-        field_prefix="reg"
-    )
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("Dword:00001")]
-    )
+    transformation = GenericTypeValueTransformation(field_prefix="reg")
+    detection_item = SigmaDetectionItem("anything", [], [SigmaString("Dword:00001")])
     result = transformation.apply_detection_item(detection_item)
     assert isinstance(result, SigmaDetection)
     assert result.item_linking == ConditionAND
