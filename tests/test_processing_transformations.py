@@ -2993,12 +2993,15 @@ def test_generic_type_value_transformation_duplicate_named_groups():
         GenericTypeValueTransformation(regex=r"(?P<type>[A-Za-z]+):(?P<type>[0-9]+)")
 
 
-def test_generic_type_value_transformation_empty_field_prefix():
-    """Test GenericTypeValueTransformation returns None if field_prefix is empty."""
-    transformation = GenericTypeValueTransformation(field_prefix="")
+def test_generic_type_value_transformation_no_field_prefix():
+    """Test GenericTypeValueTransformation with no field_prefix uses group name only."""
+    transformation = GenericTypeValueTransformation()
     detection_item = SigmaDetectionItem("anything", [], [SigmaString("Dword:00001")])
     result = transformation.apply_detection_item(detection_item)
-    assert result is None
+    assert isinstance(result, SigmaDetection)
+    assert len(result.detection_items) == 2
+    assert result.detection_items[0].field == "type"
+    assert result.detection_items[1].field == "value"
 
 
 def test_generic_type_value_transformation_null_value():

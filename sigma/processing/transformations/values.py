@@ -474,12 +474,13 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
     Attributes:
         regex (str): Regex pattern with named groups (e.g., (?P<name>pattern)).
             Default: r"(?P<type>[?A-Za-z0-9_]+):(?P<value>[^\\s=|]+)"
-        field_prefix (str): Prefix for field names. Used as {field_prefix}.{group_name}.
+        field_prefix (str | None): Prefix for field names. Used as {field_prefix}.{group_name}.
+            If None, only the group name is used as the field name.
         field_to_parse (list[str] | None): List of field names to parse. If None, all fields are parsed.
     """
 
     regex: str = r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)"
-    field_prefix: str = ""
+    field_prefix: str | None = None
     field_to_parse: list[str] | None = None
 
     def __post_init__(self) -> None:
@@ -552,9 +553,6 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
             SigmaDetection | None: A new SigmaDetection with matched items,
                 or None if no values match the pattern.
         """
-        if not self.field_prefix:
-            return None
-
         # Filter by field_to_parse if specified
         if self.field_to_parse is not None and detection_item.field not in self.field_to_parse:
             return None
@@ -574,9 +572,12 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
                     if group_value is None or group_value == "":
                         continue
 
+                    field_name = (
+                        f"{self.field_prefix}.{group_name}" if self.field_prefix else group_name
+                    )
                     new_items.append(
                         SigmaDetectionItem(
-                            field=f"{self.field_prefix}.{group_name}",
+                            field=field_name,
                             modifiers=[],
                             value=[self._convert_value(group_value)],
                         )
