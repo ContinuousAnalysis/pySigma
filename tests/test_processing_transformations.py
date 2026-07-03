@@ -2700,7 +2700,9 @@ def test_hashes_transformation_none_field():
         field_prefix="File",
         drop_algo_prefix=False,
     )
-    detection_item = SigmaDetectionItem(None, [], [SigmaString("SHA1=5F1CBC3D99558307BC1250D084FA968521482025")])
+    detection_item = SigmaDetectionItem(
+        None, [], [SigmaString("SHA1=5F1CBC3D99558307BC1250D084FA968521482025")]
+    )
     assert transformation.apply_detection_item(detection_item) is None
 
 
