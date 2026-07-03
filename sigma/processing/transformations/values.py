@@ -483,6 +483,8 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
     def __post_init__(self) -> None:
         if hasattr(super(), '__post_init__'):
             super().__post_init__()
+        
+        # Validate regex syntax
         try:
             self.re = re.compile(self.regex)
         except re.error as e:
@@ -494,6 +496,21 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
         if not self.re.groupindex:
             raise SigmaRegularExpressionError(
                 f"Regular expression '{self.regex}' must contain at least one named group"
+            )
+        
+        # Validate no duplicate named groups
+        group_names = list(self.re.groupindex.keys())
+        if len(group_names) != len(set(group_names)):
+            raise SigmaRegularExpressionError(
+                f"Regular expression '{self.regex}' contains duplicate named groups"
+            )
+        
+        # Validate regex can match at least an empty string or simple pattern
+        try:
+            self.re.match("")
+        except Exception:
+            raise SigmaRegularExpressionError(
+                f"Regular expression '{self.regex}' failed basic validation"
             )
 
     def _convert_value(self, value: str) -> SigmaType:

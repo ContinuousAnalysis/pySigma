@@ -2992,6 +2992,12 @@ def test_generic_type_value_transformation_no_named_groups():
         GenericTypeValueTransformation(regex=r"^([A-Za-z]+):([0-9]+)$")
 
 
+def test_generic_type_value_transformation_duplicate_named_groups():
+    """Test GenericTypeValueTransformation raises error if regex has duplicate named groups."""
+    with pytest.raises(SigmaRegularExpressionError, match="is invalid"):
+        GenericTypeValueTransformation(regex=r"(?P<type>[A-Za-z]+):(?P<type>[0-9]+)")
+
+
 def test_generic_type_value_transformation_empty_field_prefix():
     """Test GenericTypeValueTransformation returns None if field_prefix is empty."""
     transformation = GenericTypeValueTransformation(field_prefix="")
