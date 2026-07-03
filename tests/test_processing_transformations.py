@@ -2667,7 +2667,7 @@ def test_hashes_transformation_custom_field():
         valid_hash_algos=["MD5", "SHA1", "SHA256", "SHA512"],
         field_prefix="File",
         drop_algo_prefix=False,
-        field_toparse=["FileHash"],
+        field_to_parse=["FileHash"],
     )
     detection_item = SigmaDetectionItem(
         "FileHash", [], [SigmaString("SHA1=5F1CBC3D99558307BC1250D084FA968521482025")]
@@ -2686,7 +2686,7 @@ def test_hashes_transformation_custom_field_ignored(hashes_transformation):
         valid_hash_algos=["MD5", "SHA1", "SHA256", "SHA512"],
         field_prefix="File",
         drop_algo_prefix=False,
-        field_toparse=["FileHash"],
+        field_to_parse=["FileHash"],
     )
     detection_item = SigmaDetectionItem(
         "Hashes", [], [SigmaString("SHA1=5F1CBC3D99558307BC1250D084FA968521482025")]
