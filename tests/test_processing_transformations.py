@@ -2957,6 +2957,18 @@ def test_generic_type_value_transformation_no_match():
     assert result is None
 
 
+def test_generic_type_value_transformation_partial_match_returns_none():
+    """Test ExtractFieldsTransformation returns None if any value doesn't match."""
+    transformation = ExtractFieldsTransformation(
+        regex=r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)", field_prefix="reg"
+    )
+    detection_item = SigmaDetectionItem(
+        "anything", [], [SigmaString("Dword:1"), SigmaString("NormalValue")]
+    )
+    result = transformation.apply_detection_item(detection_item)
+    assert result is None
+
+
 def test_generic_type_value_transformation_multiple_values():
     """Test ExtractFieldsTransformation with multiple values."""
     transformation = ExtractFieldsTransformation(

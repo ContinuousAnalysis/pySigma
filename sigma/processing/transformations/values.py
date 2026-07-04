@@ -533,22 +533,25 @@ class ExtractFieldsTransformation(DetectionItemTransformation):
 
         for val in detection_item.value:
             plain = val.to_plain()
-            items: list[SigmaDetectionItem] = []
-            if match := self.re.match(plain):
-                for group_name, group_value in match.groupdict().items():
-                    if group_value is None or group_value == "":
-                        continue
+            match = self.re.match(plain)
+            if not match:
+                return None
 
-                    field_name = (
-                        f"{self.field_prefix}.{group_name}" if self.field_prefix else group_name
+            items: list[SigmaDetectionItem] = []
+            for group_name, group_value in match.groupdict().items():
+                if group_value is None or group_value == "":
+                    continue
+
+                field_name = (
+                    f"{self.field_prefix}.{group_name}" if self.field_prefix else group_name
+                )
+                items.append(
+                    SigmaDetectionItem(
+                        field=field_name,
+                        modifiers=[],
+                        value=[self._convert_value(group_value)],
                     )
-                    items.append(
-                        SigmaDetectionItem(
-                            field=field_name,
-                            modifiers=[],
-                            value=[self._convert_value(group_value)],
-                        )
-                    )
+                )
 
             if items:
                 value_detections.append(
