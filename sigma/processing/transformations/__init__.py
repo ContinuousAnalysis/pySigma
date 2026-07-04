@@ -16,6 +16,7 @@ from sigma.processing.transformations.fields import (
     FieldPrefixMappingTransformation,
     RemoveFieldTransformation,
     SetFieldTransformation,
+    UnboundFieldTransformation,
 )
 from sigma.processing.transformations.meta import NestedProcessingTransformation
 from sigma.processing.transformations.placeholder import (
@@ -48,6 +49,7 @@ transformations: dict[str, Type[Transformation]] = {
     "field_name_mapping": FieldMappingTransformation,
     "field_name_prefix_mapping": FieldPrefixMappingTransformation,
     "field_name_transform": FieldFunctionTransformation,
+    "unbound_field": UnboundFieldTransformation,
     "drop_detection_item": DropDetectionItemTransformation,
     "hashes_fields": HashesFieldsDetectionItemTransformation,
     "field_name_suffix": AddFieldnameSuffixTransformation,
@@ -83,6 +85,7 @@ __all__ = [
     "FieldMappingTransformation",
     "FieldPrefixMappingTransformation",
     "FieldFunctionTransformation",
+    "UnboundFieldTransformation",
     "DropDetectionItemTransformation",
     "HashesFieldsDetectionItemTransformation",
     "AddFieldnameSuffixTransformation",

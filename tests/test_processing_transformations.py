@@ -576,6 +576,73 @@ def test_field_mapping_none_preserves_existing_wildcards(dummy_pipeline):
     assert "*other*" in values_str
 
 
+def test_unbound_field_transformation(dummy_pipeline):
+    """Test that UnboundFieldTransformation sets field for unbound detections."""
+    rule = SigmaRule.from_dict(
+        {
+            "title": "Test",
+            "logsource": {"category": "test"},
+            "detection": {
+                "keywords": ["a", "b"],
+                "condition": "keywords",
+            },
+        }
+    )
+
+    transformation = UnboundFieldTransformation(field="message")
+    transformation.set_pipeline(dummy_pipeline)
+    transformation.apply(rule)
+
+    detection_item = rule.detection.detections["keywords"].detection_items[0]
+    assert detection_item.field == "message"
+
+
+def test_unbound_field_transformation_preserves_bound_fields(dummy_pipeline):
+    """Test that UnboundFieldTransformation doesn't modify bound fields."""
+    rule = SigmaRule.from_dict(
+        {
+            "title": "Test",
+            "logsource": {"category": "test"},
+            "detection": {
+                "selection": {"user": "admin", "process": "cmd.exe"},
+                "condition": "selection",
+            },
+        }
+    )
+
+    transformation = UnboundFieldTransformation(field="message")
+    transformation.set_pipeline(dummy_pipeline)
+    transformation.apply(rule)
+
+    detection_items = rule.detection.detections["selection"].detection_items
+    fields = [item.field for item in detection_items]
+    assert "user" in fields
+    assert "process" in fields
+
+
+def test_unbound_field_transformation_rejects_empty_field(dummy_pipeline):
+    """Test that UnboundFieldTransformation raises error for empty field."""
+    from sigma.exceptions import SigmaProcessingItemError
+
+    # Test: empty field in transformation config when applied
+    rule = SigmaRule.from_dict(
+        {
+            "title": "Test",
+            "logsource": {"category": "test"},
+            "detection": {
+                "keywords": ["a", "b"],
+                "condition": "keywords",
+            },
+        }
+    )
+
+    transformation = UnboundFieldTransformation(field="")
+    transformation.set_pipeline(dummy_pipeline)
+
+    with pytest.raises(SigmaProcessingItemError, match="field cannot be an empty string"):
+        transformation.apply(rule)
+
+
 @pytest.fixture
 def field_function_transformation():
     return FieldFunctionTransformation(

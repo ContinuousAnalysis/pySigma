@@ -1,18 +1,14 @@
-import dataclasses
-from sigma.conditions import ConditionOR
 from typing import (
-    Optional,
-    Union,
     Callable,
 )
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from sigma.correlations import SigmaCorrelationRule
 from sigma.exceptions import SigmaProcessingItemError
 from sigma.processing.transformations.base import (
     FieldMappingTransformationBase,
     PreprocessingTransformation,
 )
-from sigma.rule import SigmaRule, SigmaDetection, SigmaDetectionItem
+from sigma.rule import SigmaRule
 
 
 @dataclass
@@ -23,6 +19,24 @@ class FieldMappingTransformation(FieldMappingTransformationBase):
 
     def apply_field_name(self, field: str | None) -> None | str | list[str]:
         return self.mapping.get(field)
+
+
+@dataclass
+class UnboundFieldTransformation(FieldMappingTransformationBase):
+    """
+    Assign a field name to unbound (keyword) detection items.
+    When a detection item has no field (field=None), it is assigned the specified field.
+    """
+
+    field: str
+
+    def apply_field_name(self, field: str | None) -> str | None:
+        if self.field == "":
+            raise SigmaProcessingItemError(
+                "UnboundFieldTransformation: field cannot be an empty string."
+            )
+
+        return self.field if field is None else None
 
 
 @dataclass
