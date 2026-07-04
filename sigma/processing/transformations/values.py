@@ -475,6 +475,10 @@ class ExtractFieldsTransformation(DetectionItemTransformation):
     Strings with leading zeros (e.g., "00001", "03.14") are preserved as SigmaString to avoid
     losing the leading zero information.
 
+    To restrict this transformation to specific fields, use the
+    :class:`~sigma.processing.conditions.IncludeFieldCondition` in the processing item's
+    field_name_conditions instead of a field list attribute on the transformation.
+
     Attributes:
         regex (str): Regex pattern with named groups (e.g., (?P<name>pattern)).
         field_prefix (str | None): Prefix for field names. Used as {field_prefix}.{group_name}.
