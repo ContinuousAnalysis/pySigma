@@ -446,7 +446,7 @@ class CaseTransformation(StringValueTransformation):
 
 
 @dataclass
-class GenericTypeValueTransformation(DetectionItemTransformation):
+class ExtractFieldsTransformation(DetectionItemTransformation):
     """
     Transforms values matching a regex pattern with named groups into separate detection items.
 
@@ -460,6 +460,10 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
         Input:  reg: "Dword:00001"
         Output: reg.type: "Dword", reg.valeur: "00001"
 
+    Multiple values are each transformed independently. Each value's extracted fields are
+    AND-linked within a nested SigmaDetection, and the outer linking follows the detection
+    item's value_linking (default OR).
+
     The regex pattern must contain at least one named group. Groups without names are ignored.
 
     Type conversion for captured values:
@@ -468,26 +472,22 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
     - Float strings (without leading zeros) -> SigmaNumber(float)
     - All other strings -> SigmaString
 
-    Strings with leading zeros (e.g., "00001") are preserved as SigmaString to avoid
+    Strings with leading zeros (e.g., "00001", "03.14") are preserved as SigmaString to avoid
     losing the leading zero information.
 
     Attributes:
         regex (str): Regex pattern with named groups (e.g., (?P<name>pattern)).
-            Default: r"(?P<type>[?A-Za-z0-9_]+):(?P<value>[^\\s=|]+)"
         field_prefix (str | None): Prefix for field names. Used as {field_prefix}.{group_name}.
             If None, only the group name is used as the field name.
-        field_to_parse (list[str] | None): List of field names to parse. If None, all fields are parsed.
     """
 
-    regex: str = r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)"
+    regex: str
     field_prefix: str | None = None
-    field_to_parse: list[str] | None = None
 
     def __post_init__(self) -> None:
         if hasattr(super(), "__post_init__"):
             super().__post_init__()  # type: ignore[misc]
 
-        # Validate regex syntax
         try:
             self.re = re.compile(self.regex)
         except re.error as e:
@@ -495,41 +495,21 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
                 f"Regular expression '{self.regex}' is invalid: {str(e)}"
             ) from e
 
-        # Validate that regex has at least one named group
         if not self.re.groupindex:
             raise SigmaRegularExpressionError(
                 f"Regular expression '{self.regex}' must contain at least one named group"
             )
 
-        # Validate no duplicate named groups
         group_names = list(self.re.groupindex.keys())
         if len(group_names) != len(set(group_names)):
             raise SigmaRegularExpressionError(
                 f"Regular expression '{self.regex}' contains duplicate named groups"
             )
 
-        # Validate regex can match at least an empty string or simple pattern
-        try:
-            self.re.match("")
-        except Exception:
-            raise SigmaRegularExpressionError(
-                f"Regular expression '{self.regex}' failed basic validation"
-            )
-
     def _convert_value(self, value: str) -> SigmaType:
-        """
-        Convert a string value to the appropriate SigmaType.
-
-        Args:
-            value (str): The string value to convert.
-
-        Returns:
-            SigmaType: The converted value (SigmaNumber, SigmaString, or SigmaNull).
-        """
         if value.lower() in ("null", "none", ""):
             return SigmaNull()
-        # Don't convert strings with leading zeros (except "0" alone)
-        if value != "0" and value.startswith("0") and value[1:].isdigit():
+        if value != "0" and value.startswith("0"):
             return SigmaString(value)
         try:
             return SigmaNumber(int(value))
@@ -540,34 +520,17 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
                 return SigmaString(value)
 
     def apply_detection_item(self, detection_item: SigmaDetectionItem) -> SigmaDetection | None:
-        """
-        Applies the transformation to detection items whose values match the regex pattern.
-
-        Extracts named capture groups from the regex match and creates one detection item
-        per named group. Each item uses the format: {field_prefix}.{group_name}.
-
-        Args:
-            detection_item (SigmaDetectionItem): The detection item to transform.
-
-        Returns:
-            SigmaDetection | None: A new SigmaDetection with matched items,
-                or None if no values match the pattern.
-        """
-        # Filter by field_to_parse if specified
-        if self.field_to_parse is not None and detection_item.field not in self.field_to_parse:
-            return None
-
         if not isinstance(detection_item.value, list) or not all(
             isinstance(v, SigmaString) for v in detection_item.value
         ):
             return None
 
-        new_items: list[SigmaDetectionItem | SigmaDetection] = []
+        value_detections: list[SigmaDetection] = []
 
         for val in detection_item.value:
             plain = val.to_plain()
+            items: list[SigmaDetectionItem] = []
             if match := self.re.match(plain):
-                # Create one item per named group
                 for group_name, group_value in match.groupdict().items():
                     if group_value is None or group_value == "":
                         continue
@@ -575,7 +538,7 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
                     field_name = (
                         f"{self.field_prefix}.{group_name}" if self.field_prefix else group_name
                     )
-                    new_items.append(
+                    items.append(
                         SigmaDetectionItem(
                             field=field_name,
                             modifiers=[],
@@ -583,9 +546,18 @@ class GenericTypeValueTransformation(DetectionItemTransformation):
                         )
                     )
 
-        if new_items:
-            return SigmaDetection(
-                detection_items=new_items,
-                item_linking=ConditionAND,
-            )
-        return None
+            if items:
+                value_detections.append(
+                    SigmaDetection(detection_items=items, item_linking=ConditionAND)
+                )
+
+        if not value_detections:
+            return None
+
+        if len(value_detections) == 1:
+            return value_detections[0]
+
+        return SigmaDetection(
+            detection_items=value_detections,
+            item_linking=detection_item.value_linking,
+        )
