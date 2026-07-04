@@ -290,6 +290,28 @@ class SigmaWideModifier(SigmaValueModifier[SigmaString, SigmaString]):
         return s
 
 
+class SigmaUtf16beModifier(SigmaValueModifier[SigmaString, SigmaString]):
+    """Encode string as wide string (UTF-16BE)."""
+
+    def modify(self, val: SigmaString) -> SigmaString:
+        r: list[SigmaStringPartType] = list()
+        for item in val.s:
+            if isinstance(item, str):
+                try:
+                    r.append(item.encode("utf-16be").decode("utf-8"))
+                except UnicodeDecodeError:
+                    raise SigmaValueError(
+                        f"UTF-16BE modifier only allowed for ascii strings, input string '{str(val)}' isn't one",
+                        source=self.source,
+                    )
+            else:
+                r.append(item)
+
+        s = SigmaString()
+        s.s = r
+        return s
+
+
 class SigmaWindowsDashModifier(SigmaValueModifier[SigmaString, SigmaExpansion]):
     """
     Expand parameter characters / and - that are often interchangeable in Windows into the other
@@ -558,6 +580,7 @@ modifier_mapping: dict[str, Type[SigmaModifier[Any, Any]]] = {
     "month": SigmaTimestampMonthModifier,
     "multiline": SigmaRegularExpressionMultilineFlagModifier,
     "re": SigmaRegularExpressionModifier,
+    "utf16be": SigmaUtf16beModifier,
     "s": SigmaRegularExpressionDotAllFlagModifier,
     "startswith": SigmaStartswithModifier,
     "week": SigmaTimestampWeekModifier,
