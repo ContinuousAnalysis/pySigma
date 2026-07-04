@@ -529,7 +529,7 @@ class ExtractFieldsTransformation(DetectionItemTransformation):
         ):
             return None
 
-        value_detections: list[SigmaDetection] = []
+        value_detections: list[SigmaDetectionItem | SigmaDetection] = []
 
         for val in detection_item.value:
             plain = val.to_plain()
@@ -537,7 +537,7 @@ class ExtractFieldsTransformation(DetectionItemTransformation):
             if not match:
                 return None
 
-            items: list[SigmaDetectionItem] = []
+            items: list[SigmaDetectionItem | SigmaDetection] = []
             for group_name, group_value in match.groupdict().items():
                 if group_value is None or group_value == "":
                     continue
@@ -562,7 +562,7 @@ class ExtractFieldsTransformation(DetectionItemTransformation):
             return None
 
         if len(value_detections) == 1:
-            return value_detections[0]
+            return cast(SigmaDetection, value_detections[0])
 
         return SigmaDetection(
             detection_items=value_detections,
