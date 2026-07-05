@@ -155,6 +155,32 @@ def test_validator_control_characters():
     assert validator.validate(rule) == [ControlCharacterIssue([rule], SigmaString("\temp"))]
 
 
+def test_validator_control_characters_c0_range_boundary():
+    # The C0 control range is 0x00-0x1F inclusive, so 0x1F (Unit Separator) must be
+    # flagged while 0x20 (space, the first printable character) must not.
+    validator = ControlCharacterValidator()
+    rule = SigmaRule.from_yaml("""
+    title: Test
+    status: test
+    logsource:
+        category: test
+    detection:
+        sel:
+            field1: placeholder
+        condition: sel
+    """)
+    detection_item = rule.detection.detections["sel"].detection_items[0]
+
+    # 0x1F is a control character and must be reported.
+    us_value = SigmaString("value\x1fend")
+    detection_item.value = [us_value]
+    assert validator.validate(rule) == [ControlCharacterIssue([rule], us_value)]
+
+    # 0x20 (space) is printable and must not be reported.
+    detection_item.value = [SigmaString("value end")]
+    assert validator.validate(rule) == []
+
+
 def test_validator_control_characters_correlation_rule(correlation_rule):
     validator = ControlCharacterValidator()
     assert validator.validate(correlation_rule) == []
