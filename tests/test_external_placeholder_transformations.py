@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -521,18 +522,26 @@ class TestHTTPPlaceholderTransformation:
 
 class TestCommandPlaceholderTransformation:
     def test_runs_command_string(self, dummy_pipeline):
-        t = CommandPlaceholderTransformation(
-            cmd="printf 'cmd_val1\\ncmd_val2\\n'", allow_external_sources=True
+        # Use platform-agnostic command
+        cmd = (
+            [sys.executable, "-c", 'print("cmd_val1")\nprint("cmd_val2")']
+            if sys.platform == "win32"
+            else "printf 'cmd_val1\\ncmd_val2\\n'"
         )
+        t = CommandPlaceholderTransformation(cmd=cmd, allow_external_sources=True)
         t.set_pipeline(dummy_pipeline)
         values = t._get_values()
         assert "cmd_val1" in values
         assert "cmd_val2" in values
 
     def test_runs_command_list(self, dummy_pipeline):
-        t = CommandPlaceholderTransformation(
-            cmd=["printf", "a\nb\nc\n"], allow_external_sources=True
+        # Use platform-agnostic command
+        cmd = (
+            [sys.executable, "-c", 'print("a")\nprint("b")\nprint("c")']
+            if sys.platform == "win32"
+            else ["printf", "a\nb\nc\n"]
         )
+        t = CommandPlaceholderTransformation(cmd=cmd, allow_external_sources=True)
         t.set_pipeline(dummy_pipeline)
         values = t._get_values()
         assert "a" in values
@@ -581,8 +590,14 @@ class TestCommandPlaceholderTransformation:
             assert t._get_values() == ["x", "y"]
 
     def test_max_stdout_exceeded(self, dummy_pipeline):
+        # Use platform-agnostic command
+        cmd = (
+            [sys.executable, "-c", 'print("x" * 5000)']
+            if sys.platform == "win32"
+            else ["printf", "%s", "x" * 5000]
+        )
         t = CommandPlaceholderTransformation(
-            cmd=["printf", "%s", "x" * 5000],
+            cmd=cmd,
             allow_external_sources=True,
             max_stdout=1000,
         )

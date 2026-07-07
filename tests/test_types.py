@@ -226,6 +226,15 @@ def test_string_contains_placeholders_all_excluded():
     )
 
 
+def test_string_placeholders_with_dot():
+    """Test placeholders with dots in names"""
+    assert SigmaString("test%var.name%end").insert_placeholders().s == [
+        "test",
+        Placeholder("var.name"),
+        "end",
+    ]
+
+
 def test_strings_equal():
     assert SigmaString("test*string") == SigmaString("test*string")
 
