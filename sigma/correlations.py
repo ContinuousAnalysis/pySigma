@@ -52,6 +52,8 @@ SigmaCorrelationTypeLiteral = Literal[
     "value_count",
     "temporal",
     "temporal_ordered",
+    "temporal_extended",
+    "temporal_ordered_extended",
     "value_sum",
     "value_avg",
     "value_percentile",
