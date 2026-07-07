@@ -14,6 +14,8 @@ from sigma.modifiers import (
     SigmaBase64Modifier,
     SigmaBase64OffsetModifier,
     SigmaWideModifier,
+    SigmaUTF16Modifier,
+    SigmaUTF16BEModifier,
     SigmaRegularExpressionModifier,
     SigmaCIDRModifier,
     SigmaAllModifier,
@@ -233,6 +235,32 @@ def test_wide(dummy_detection_item):
 def test_wide_noascii(dummy_detection_item):
     with pytest.raises(SigmaValueError, match="ascii strings.*test.yml"):
         SigmaWideModifier(dummy_detection_item, [], SigmaRuleLocation("test.yml")).apply(
+            SigmaString("foobär")
+        )
+
+
+def test_utf16be(dummy_detection_item):
+    assert SigmaUTF16BEModifier(dummy_detection_item, []).apply(SigmaString("*foobar*")) == [
+        SigmaString("*\x00f\x00o\x00o\x00b\x00a\x00r*")
+    ]
+
+
+def test_utf16be_noascii(dummy_detection_item):
+    with pytest.raises(SigmaValueError, match="UTF-16BE modifier only allowed.*test.yml"):
+        SigmaUTF16BEModifier(dummy_detection_item, [], SigmaRuleLocation("test.yml")).apply(
+            SigmaString("foobär")
+        )
+
+
+def test_utf16(dummy_detection_item):
+    assert SigmaUTF16Modifier(dummy_detection_item, []).apply(SigmaString("*foobar*")) == [
+        SigmaString("\ufeff*f\x00o\x00o\x00b\x00a\x00r\x00*")
+    ]
+
+
+def test_utf16_noascii(dummy_detection_item):
+    with pytest.raises(SigmaValueError, match="UTF-16 modifier only allowed.*test.yml"):
+        SigmaUTF16Modifier(dummy_detection_item, [], SigmaRuleLocation("test.yml")).apply(
             SigmaString("foobär")
         )
 
