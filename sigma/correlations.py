@@ -39,8 +39,6 @@ class SigmaCorrelationType(EnumLowercaseStringMixin, Enum):
     VALUE_COUNT = auto()
     TEMPORAL = auto()
     TEMPORAL_ORDERED = auto()
-    TEMPORAL_EXTENDED = auto()
-    TEMPORAL_ORDERED_EXTENDED = auto()
     VALUE_SUM = auto()
     VALUE_AVG = auto()
     VALUE_PERCENTILE = auto()
@@ -54,8 +52,6 @@ SigmaCorrelationTypeLiteral = Literal[
     "value_count",
     "temporal",
     "temporal_ordered",
-    "temporal_extended",
-    "temporal_ordered_extended",
     "value_sum",
     "value_avg",
     "value_percentile",
@@ -459,8 +455,6 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
         if isinstance(self.condition, SigmaExtendedCorrelationCondition) and self.type not in {
             SigmaCorrelationType.TEMPORAL,
             SigmaCorrelationType.TEMPORAL_ORDERED,
-            SigmaCorrelationType.TEMPORAL_EXTENDED,
-            SigmaCorrelationType.TEMPORAL_ORDERED_EXTENDED,
         }:
             raise sigma_exceptions.SigmaCorrelationConditionError(
                 "Extended conditions can only be used with temporal or temporal_ordered correlation types",
@@ -492,8 +486,6 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
         if self.type not in {
             SigmaCorrelationType.TEMPORAL,
             SigmaCorrelationType.TEMPORAL_ORDERED,
-            SigmaCorrelationType.TEMPORAL_EXTENDED,
-            SigmaCorrelationType.TEMPORAL_ORDERED_EXTENDED,
         } and not isinstance(self.condition, SigmaCorrelationCondition):
             raise sigma_exceptions.SigmaCorrelationRuleError(
                 "Non-temporal Sigma correlation rule without condition", source=self.source
@@ -566,8 +558,6 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
         elif correlation_type not in (
             SigmaCorrelationType.TEMPORAL,
             SigmaCorrelationType.TEMPORAL_ORDERED,
-            SigmaCorrelationType.TEMPORAL_EXTENDED,
-            SigmaCorrelationType.TEMPORAL_ORDERED_EXTENDED,
         ):
             # Only require rules for non-temporal types (temporal types can extract from condition)
             errors.append(
@@ -644,8 +634,6 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
                 if correlation_type not in (
                     SigmaCorrelationType.TEMPORAL,
                     SigmaCorrelationType.TEMPORAL_ORDERED,
-                    SigmaCorrelationType.TEMPORAL_EXTENDED,
-                    SigmaCorrelationType.TEMPORAL_ORDERED_EXTENDED,
                 ):
                     errors.append(
                         sigma_exceptions.SigmaCorrelationRuleError(
@@ -671,8 +659,6 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
         elif correlation_type not in (
             SigmaCorrelationType.TEMPORAL,
             SigmaCorrelationType.TEMPORAL_ORDERED,
-            SigmaCorrelationType.TEMPORAL_EXTENDED,
-            SigmaCorrelationType.TEMPORAL_ORDERED_EXTENDED,
         ):
             errors.append(
                 sigma_exceptions.SigmaCorrelationRuleError(
@@ -682,8 +668,6 @@ class SigmaCorrelationRule(SigmaRuleBase, ProcessingItemTrackingMixin):
         elif correlation_type in (
             SigmaCorrelationType.TEMPORAL,
             SigmaCorrelationType.TEMPORAL_ORDERED,
-            SigmaCorrelationType.TEMPORAL_EXTENDED,
-            SigmaCorrelationType.TEMPORAL_ORDERED_EXTENDED,
         ):
             # For temporal types without condition, set default
             # default condition for temporal correlation rules: count >= number of rules
