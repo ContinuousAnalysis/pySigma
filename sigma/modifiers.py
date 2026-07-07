@@ -290,7 +290,7 @@ class SigmaWideModifier(SigmaValueModifier[SigmaString, SigmaString]):
         return s
 
 
-class SigmaUtf16beModifier(SigmaValueModifier[SigmaString, SigmaString]):
+class SigmaUTF16BEModifier(SigmaValueModifier[SigmaString, SigmaString]):
     """Encode string as wide string (UTF-16BE)."""
 
     def modify(self, val: SigmaString) -> SigmaString:
@@ -301,7 +301,7 @@ class SigmaUtf16beModifier(SigmaValueModifier[SigmaString, SigmaString]):
                     r.append(item.encode("utf-16be").decode("utf-8"))
                 except UnicodeDecodeError:
                     raise SigmaValueError(
-                        f"UTF-16BE modifier only allowed for ascii strings, input string '{str(val)}' isn't one",
+                        f"UTF-16BE modifier only allowed for valid Unicode strings, input string '{str(val)}' isn't one",
                         source=self.source,
                     )
             else:
@@ -312,7 +312,7 @@ class SigmaUtf16beModifier(SigmaValueModifier[SigmaString, SigmaString]):
         return s
 
 
-class SigmaUtf16Modifier(SigmaValueModifier[SigmaString, SigmaString]):
+class SigmaUTF16Modifier(SigmaValueModifier[SigmaString, SigmaString]):
     """Encode string as wide string with BOM (UTF-16LE with BOM prefix)."""
 
     def modify(self, val: SigmaString) -> SigmaString:
@@ -324,7 +324,7 @@ class SigmaUtf16Modifier(SigmaValueModifier[SigmaString, SigmaString]):
                     r.append(item.encode("utf-16le").decode("utf-8"))
                 except UnicodeDecodeError:
                     raise SigmaValueError(
-                        f"UTF-16 modifier only allowed for ascii strings, input string '{str(val)}' isn't one",
+                        f"UTF-16 modifier only allowed for valid Unicode strings, input string '{str(val)}' isn't one",
                         source=self.source,
                     )
             else:
@@ -603,8 +603,8 @@ modifier_mapping: dict[str, Type[SigmaModifier[Any, Any]]] = {
     "month": SigmaTimestampMonthModifier,
     "multiline": SigmaRegularExpressionMultilineFlagModifier,
     "re": SigmaRegularExpressionModifier,
-    "utf16": SigmaUtf16Modifier,
-    "utf16be": SigmaUtf16beModifier,
+    "utf16": SigmaUTF16Modifier,
+    "utf16be": SigmaUTF16BEModifier,
     "s": SigmaRegularExpressionDotAllFlagModifier,
     "startswith": SigmaStartswithModifier,
     "week": SigmaTimestampWeekModifier,
