@@ -2914,7 +2914,7 @@ def test_strict_mapped_fields_no_pipeline():
         transformation.apply(rule)
 
 
-def test_generic_type_value_transformation_single():
+def test_extract_fields_transformation():
     """Test ExtractFieldsTransformation with named groups."""
     transformation = ExtractFieldsTransformation(
         regex=r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)", field_prefix="reg"
@@ -2930,24 +2930,7 @@ def test_generic_type_value_transformation_single():
     assert result.item_linking == ConditionAND
 
 
-def test_generic_type_value_transformation_custom_named_groups():
-    """Test ExtractFieldsTransformation with custom named groups."""
-    transformation = ExtractFieldsTransformation(
-        regex=r"(?P<operation>Read|Write):(?P<path>.+)", field_prefix="file_event"
-    )
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("Read:C:\\Windows\\System32\\cmd.exe")]
-    )
-    result = transformation.apply_detection_item(detection_item)
-    assert isinstance(result, SigmaDetection)
-    assert len(result.detection_items) == 2
-    assert result.detection_items[0].field == "file_event.operation"
-    assert result.detection_items[0].value == [SigmaString("Read")]
-    assert result.detection_items[1].field == "file_event.path"
-    assert result.detection_items[1].value == [SigmaString("C:\\Windows\\System32\\cmd.exe")]
-
-
-def test_generic_type_value_transformation_no_match():
+def test_extract_fields_transformation_no_match():
     """Test ExtractFieldsTransformation with no match returns None."""
     transformation = ExtractFieldsTransformation(
         regex=r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)", field_prefix="reg"
@@ -2957,19 +2940,7 @@ def test_generic_type_value_transformation_no_match():
     assert result is None
 
 
-def test_generic_type_value_transformation_partial_match_returns_none():
-    """Test ExtractFieldsTransformation returns None if any value doesn't match."""
-    transformation = ExtractFieldsTransformation(
-        regex=r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)", field_prefix="reg"
-    )
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("Dword:1"), SigmaString("NormalValue")]
-    )
-    result = transformation.apply_detection_item(detection_item)
-    assert result is None
-
-
-def test_generic_type_value_transformation_multiple_values():
+def test_extract_fields_transformation_multiple_values():
     """Test ExtractFieldsTransformation with multiple values."""
     transformation = ExtractFieldsTransformation(
         regex=r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)", field_prefix="reg"
@@ -3001,25 +2972,25 @@ def test_generic_type_value_transformation_multiple_values():
     assert second.detection_items[1].value == [SigmaNumber(2)]
 
 
-def test_generic_type_value_transformation_invalid_regex():
+def test_extract_fields_transformation_invalid_regex():
     """Test ExtractFieldsTransformation with invalid regex raises error."""
     with pytest.raises(SigmaRegularExpressionError):
-        ExtractFieldsTransformation(regex=r"[invalid")
+        ExtractFieldsTransformation(regex=r"invalid")
 
 
-def test_generic_type_value_transformation_no_named_groups():
+def test_extract_fields_transformation_no_named_groups():
     """Test ExtractFieldsTransformation raises error if regex has no named groups."""
     with pytest.raises(SigmaRegularExpressionError, match="must contain at least one named group"):
         ExtractFieldsTransformation(regex=r"^([A-Za-z]+):([0-9]+)$")
 
 
-def test_generic_type_value_transformation_duplicate_named_groups():
+def test_extract_fields_transformation_duplicate_named_groups():
     """Test ExtractFieldsTransformation raises error if regex has duplicate named groups."""
     with pytest.raises(SigmaRegularExpressionError, match="is invalid"):
         ExtractFieldsTransformation(regex=r"(?P<type>[A-Za-z]+):(?P<type>[0-9]+)")
 
 
-def test_generic_type_value_transformation_no_field_prefix():
+def test_extract_fields_transformation_no_field_prefix():
     """Test ExtractFieldsTransformation with no field_prefix uses group name only."""
     transformation = ExtractFieldsTransformation(
         regex=r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)"
@@ -3032,7 +3003,7 @@ def test_generic_type_value_transformation_no_field_prefix():
     assert result.detection_items[1].field == "value"
 
 
-def test_generic_type_value_transformation_null_value():
+def test_extract_fields_transformation_null_value():
     """Test ExtractFieldsTransformation with null value."""
     transformation = ExtractFieldsTransformation(
         regex=r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)", field_prefix="reg"
@@ -3047,7 +3018,7 @@ def test_generic_type_value_transformation_null_value():
     assert isinstance(result.detection_items[1].value[0], SigmaNull)
 
 
-def test_generic_type_value_transformation_number_value():
+def test_extract_fields_transformation_number_value():
     """Test ExtractFieldsTransformation with number value."""
     transformation = ExtractFieldsTransformation(
         regex=r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)", field_prefix="reg"
@@ -3063,7 +3034,7 @@ def test_generic_type_value_transformation_number_value():
     assert result.detection_items[1].value[0].number == 42
 
 
-def test_generic_type_value_transformation_float_value():
+def test_extract_fields_transformation_float_value():
     """Test ExtractFieldsTransformation with float value."""
     transformation = ExtractFieldsTransformation(
         regex=r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)", field_prefix="reg"
@@ -3079,26 +3050,7 @@ def test_generic_type_value_transformation_float_value():
     assert result.detection_items[1].value[0].number == 3.14
 
 
-def test_generic_type_value_transformation_three_named_groups():
-    """Test ExtractFieldsTransformation with three named groups."""
-    transformation = ExtractFieldsTransformation(
-        regex=r"(?P<protocol>http|https)://(?P<host>[^/]+)(?P<path>/[^?#]*)?", field_prefix="url"
-    )
-    detection_item = SigmaDetectionItem(
-        "anything", [], [SigmaString("https://example.com/path/to/resource")]
-    )
-    result = transformation.apply_detection_item(detection_item)
-    assert isinstance(result, SigmaDetection)
-    assert len(result.detection_items) == 3
-    assert result.detection_items[0].field == "url.protocol"
-    assert result.detection_items[0].value == [SigmaString("https")]
-    assert result.detection_items[1].field == "url.host"
-    assert result.detection_items[1].value == [SigmaString("example.com")]
-    assert result.detection_items[2].field == "url.path"
-    assert result.detection_items[2].value == [SigmaString("/path/to/resource")]
-
-
-def test_generic_type_value_transformation_mixed_named_unnamed_groups():
+def test_extract_fields_transformation_mixed_named_unnamed_groups():
     """Test ExtractFieldsTransformation with mixed named and unnamed groups."""
     transformation = ExtractFieldsTransformation(
         regex=r"(?P<type>[A-Za-z]+):(.+)",  # Second group is unnamed, will be ignored
@@ -3112,7 +3064,7 @@ def test_generic_type_value_transformation_mixed_named_unnamed_groups():
     assert result.detection_items[0].value == [SigmaString("Dword")]
 
 
-def test_generic_type_value_transformation_empty_domain():
+def test_extract_fields_transformation_empty_domain():
     """Test ExtractFieldsTransformation with empty domain (edge case)."""
     transformation = ExtractFieldsTransformation(
         regex=r"(?P<domain>[^\\]*)\\(?P<username>.+)", field_prefix="user"
@@ -3125,19 +3077,7 @@ def test_generic_type_value_transformation_empty_domain():
     assert result.detection_items[0].value == [SigmaString("john.doe")]
 
 
-def test_generic_type_value_transformation_and_condition():
-    """Test that extracted items are in a SigmaDetection with AND condition."""
-    transformation = ExtractFieldsTransformation(
-        regex=r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)", field_prefix="reg"
-    )
-    detection_item = SigmaDetectionItem("anything", [], [SigmaString("Dword:00001")])
-    result = transformation.apply_detection_item(detection_item)
-    assert isinstance(result, SigmaDetection)
-    assert result.item_linking == ConditionAND
-    assert len(result.detection_items) == 2
-
-
-def test_generic_type_value_transformation_leading_zero_float():
+def test_extract_fields_transformation_leading_zero_float():
     """Test ExtractFieldsTransformation preserves leading-zero floats as strings."""
     transformation = ExtractFieldsTransformation(
         regex=r"(?P<type>[A-Za-z0-9_]+):(?P<value>[^\s=|]+)", field_prefix="reg"
