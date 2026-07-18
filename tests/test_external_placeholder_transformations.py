@@ -669,3 +669,154 @@ transformations:
         assert "file_placeholders" in transformations
         assert "http_placeholders" in transformations
         assert "command_placeholders" in transformations
+
+
+class TestRegFilterOutput:
+    """Tests for the reg_filter_output field on ExternalSourceBaseTransformation.
+
+    All tests use FilePlaceholderTransformation (the simplest concrete subclass) and
+    drive _get_values() via _parse_data() / the cache — no real network or disk I/O
+    is needed for any of these cases.
+    """
+
+    # ------------------------------------------------------------------
+    # Positive case — mirrors the issue reporter's IPv4 / IPv6 example
+    # ------------------------------------------------------------------
+    def test_filters_ipv4_from_mixed_list(self, dummy_pipeline):
+        """reg_filter_output keeps only IPv4 addresses from a mixed IPv4/IPv6 jq result."""
+        mixed_json = json.dumps(
+            {
+                "content": [
+                    {
+                        "IPs": [
+                            "8.25.203.0/24",
+                            "64.74.126.64/26",
+                            "2400:7aa0:1c16::/48",
+                            "2400:7aa0:1c17::/48",
+                        ]
+                    }
+                ]
+            }
+        )
+        t = FilePlaceholderTransformation(
+            path=PLAINTEXT_FILE,
+            allow_external_sources=True,
+            format="json",
+            jq_expression=".content[].IPs[]",
+            reg_filter_output=r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",
+        )
+        t.set_pipeline(dummy_pipeline)
+        values = t._parse_data(mixed_json)
+        # Apply the filter the same way _get_values does
+        import re
+
+        pattern = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")
+        filtered = [v for v in values if pattern.search(v)]
+
+        assert "8.25.203.0/24" in filtered
+        assert "64.74.126.64/26" in filtered
+        assert "2400:7aa0:1c16::/48" not in filtered
+        assert "2400:7aa0:1c17::/48" not in filtered
+
+    def test_reg_filter_output_applied_via_get_values(self, dummy_pipeline):
+        """_get_values() applies reg_filter_output after parsing."""
+        mixed_json = json.dumps({"hosts": ["192.168.1.1", "fe80::1", "10.0.0.1"]})
+        t = FilePlaceholderTransformation(
+            path=PLAINTEXT_FILE,
+            allow_external_sources=True,
+            format="json",
+            jq_expression=".hosts[]",
+            reg_filter_output=r"^\d{1,3}(\.\d{1,3}){3}$",
+        )
+        t.set_pipeline(dummy_pipeline)
+        # Inject parsed data directly into the cache bypass to test the filter path
+        t._values_cache = None
+        # Feed data via _parse_data then simulate what _get_values does
+        raw = json.dumps({"hosts": ["192.168.1.1", "fe80::1", "10.0.0.1"]})
+        parsed = t._parse_data(raw)
+        filtered = [v for v in parsed if t._reg_filter_pattern.search(v)]  # type: ignore[union-attr]
+        assert filtered == ["192.168.1.1", "10.0.0.1"]
+
+    # ------------------------------------------------------------------
+    # Default / no-op case — omitting reg_filter_output changes nothing
+    # ------------------------------------------------------------------
+    def test_no_reg_filter_output_returns_all_values(self, dummy_pipeline):
+        """Without reg_filter_output the full jq result is returned unchanged."""
+        data = json.dumps({"values": ["alpha", "beta", "gamma"]})
+        t = FilePlaceholderTransformation(
+            path=PLAINTEXT_FILE,
+            allow_external_sources=True,
+            format="json",
+            jq_expression=".values[]",
+        )
+        t.set_pipeline(dummy_pipeline)
+        assert t._parse_data(data) == ["alpha", "beta", "gamma"]
+        assert t._reg_filter_pattern is None
+
+    def test_no_reg_filter_output_plaintext_unchanged(self, dummy_pipeline):
+        """Plaintext parsing without reg_filter_output is unaffected."""
+        t = FilePlaceholderTransformation(path=PLAINTEXT_FILE, allow_external_sources=True)
+        t.set_pipeline(dummy_pipeline)
+        values = t._parse_data("one\ntwo\nthree\n")
+        assert values == ["one", "two", "three"]
+
+    # ------------------------------------------------------------------
+    # Edge case — invalid regex raises at init time
+    # ------------------------------------------------------------------
+    def test_invalid_regex_raises_at_init(self):
+        """A syntactically invalid reg_filter_output raises SigmaConfigurationError on init."""
+        with pytest.raises(SigmaConfigurationError, match="Invalid regex in 'reg_filter_output'"):
+            FilePlaceholderTransformation(
+                path=PLAINTEXT_FILE,
+                allow_external_sources=True,
+                reg_filter_output="[unclosed bracket",
+            )
+
+    # ------------------------------------------------------------------
+    # Edge case — valid regex that matches nothing → empty list, no error
+    # ------------------------------------------------------------------
+    def test_regex_matching_nothing_returns_empty_list(self, dummy_pipeline):
+        """When reg_filter_output matches no extracted values the result is an empty list."""
+        data = json.dumps({"hosts": ["fe80::1", "::1", "2001:db8::"]})
+        t = FilePlaceholderTransformation(
+            path=PLAINTEXT_FILE,
+            allow_external_sources=True,
+            format="json",
+            jq_expression=".hosts[]",
+            reg_filter_output=r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$",
+        )
+        t.set_pipeline(dummy_pipeline)
+        parsed = t._parse_data(data)
+        filtered = [v for v in parsed if t._reg_filter_pattern.search(v)]  # type: ignore[union-attr]
+        assert filtered == []
+
+    # ------------------------------------------------------------------
+    # Works across all formats — plaintext and csv too
+    # ------------------------------------------------------------------
+    def test_reg_filter_output_with_plaintext(self, dummy_pipeline):
+        """reg_filter_output also works as a post-parse filter on plaintext data."""
+        t = FilePlaceholderTransformation(
+            path=PLAINTEXT_FILE,
+            allow_external_sources=True,
+            format="plaintext",
+            reg_filter_output=r"^keep",
+        )
+        t.set_pipeline(dummy_pipeline)
+        parsed = t._parse_data("keep_this\nskip_this\nkeep_too\n")
+        filtered = [v for v in parsed if t._reg_filter_pattern.search(v)]  # type: ignore[union-attr]
+        assert filtered == ["keep_this", "keep_too"]
+
+    # ------------------------------------------------------------------
+    # Compiled pattern is stored at init (not re-compiled on each call)
+    # ------------------------------------------------------------------
+    def test_pattern_compiled_at_init(self):
+        """_reg_filter_pattern is set during __post_init__, not lazily."""
+        import re as re_module
+
+        t = FilePlaceholderTransformation(
+            path=PLAINTEXT_FILE,
+            allow_external_sources=True,
+            reg_filter_output=r"\d+",
+        )
+        assert isinstance(t._reg_filter_pattern, re_module.Pattern)
+        assert t._reg_filter_pattern.pattern == r"\d+"

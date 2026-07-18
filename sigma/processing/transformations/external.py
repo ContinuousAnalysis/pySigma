@@ -52,6 +52,11 @@ class ExternalSourceBaseTransformation(BasePlaceholderTransformation):
     * ``"json"`` — JSON data; *jq_expression* selects the value(s).
     * ``"yaml"`` — YAML data; *jq_expression* selects the value(s).
 
+    An optional *reg_filter_output* regex is applied to every extracted value after
+    parsing; only values that match (via :func:`re.search`) are kept.  Values that
+    do not match are silently dropped.  An invalid regex pattern raises
+    :class:`~sigma.exceptions.SigmaConfigurationError` at pipeline-load time.
+
     **Security**: external-source transformations are disabled by default.
     Enable them by passing ``allow_external_sources=True`` when loading the
     pipeline or by setting the environment variable
@@ -63,9 +68,13 @@ class ExternalSourceBaseTransformation(BasePlaceholderTransformation):
     csv_column: str | int | None = None
     csv_has_header: bool = True
     jq_expression: str | None = None
+    reg_filter_output: str | None = None
     allow_external_sources: bool = False
 
     _values_cache: list[str] | None = field(init=False, default=None, repr=False, compare=False)
+    _reg_filter_pattern: re.Pattern[str] | None = field(
+        init=False, default=None, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         if self.format not in SUPPORTED_FORMATS:
@@ -73,6 +82,11 @@ class ExternalSourceBaseTransformation(BasePlaceholderTransformation):
                 f"Unknown external source format '{self.format}'. "
                 f"Supported formats: {', '.join(SUPPORTED_FORMATS)}."
             )
+        if self.reg_filter_output is not None:
+            try:
+                self._reg_filter_pattern = re.compile(self.reg_filter_output)
+            except re.error as e:
+                raise SigmaConfigurationError(f"Invalid regex in 'reg_filter_output': {e}") from e
         super().__post_init__()
 
     def _external_sources_allowed(self) -> bool:
@@ -109,7 +123,10 @@ class ExternalSourceBaseTransformation(BasePlaceholderTransformation):
             )
 
         data = self._fetch_data()
-        self._values_cache = self._parse_data(data)
+        values = self._parse_data(data)
+        if self._reg_filter_pattern is not None:
+            values = [v for v in values if self._reg_filter_pattern.search(v)]
+        self._values_cache = values
         return self._values_cache
 
     def _parse_data(self, data: str) -> list[str]:
@@ -280,6 +297,8 @@ class HTTPPlaceholderTransformation(ExternalSourceBaseTransformation):
     * **csv_column** — column name (str) or 0-based index (int) for CSV format
     * **csv_has_header** — whether the first CSV row is a header (default ``True``)
     * **jq_expression** — path expression for JSON/YAML formats
+    * **reg_filter_output** — optional regex; only extracted values that match
+      are kept (applied after parsing, across all formats)
     * **include** / **exclude** — placeholder name lists
     """
 
