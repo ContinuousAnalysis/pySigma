@@ -553,7 +553,7 @@ class ExtractFieldsTransformation(DetectionItemTransformation):
                             value=[val],
                         )
                     )
-                # If preserve_unmatched is False, skip this value (don't add to results)
+                # Otherwise, skip this value (dropped from results)
                 continue
 
             items: list[SigmaDetectionItem | SigmaDetection] = []

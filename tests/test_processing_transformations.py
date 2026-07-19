@@ -3310,7 +3310,8 @@ def test_extract_fields_transformation_no_match_preserve_true():
     )
     detection_item = SigmaDetectionItem("anything", [], [SigmaString("NOMATCH")])
     result = transformation.apply_detection_item(detection_item)
-    # Unmatched value should be preserved - single item returned as SigmaDetectionItem
+    # Unmatched value should be preserved
+    # Note: Single value returns SigmaDetectionItem directly (unwrapped)
     assert isinstance(result, SigmaDetectionItem)
     assert result.field == "anything"
     assert result.value == [SigmaString("NOMATCH")]
