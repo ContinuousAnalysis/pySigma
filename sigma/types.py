@@ -292,14 +292,14 @@ class SigmaString(SigmaType):
         current = []
 
         while i < len(s):
-            if s[i] == '%' and not escape_map[i]:
+            if s[i] == "%" and not escape_map[i]:
                 # Found unescaped percent - look for placeholder closing percent
                 j = i + 1
                 while j < len(s):
                     if escape_map[j]:
                         # Skip escaped characters
                         j += 1
-                    elif s[j] == '%':
+                    elif s[j] == "%":
                         # Found closing percent
                         name = s[i + 1 : j]
                         # Unescape the placeholder name (handle \% and \\ within name)
@@ -308,7 +308,7 @@ class SigmaString(SigmaType):
                         # Process accumulated string before placeholder
                         if current:
                             # Replace \% with % in the accumulated string
-                            accumulated = ''.join(current).replace('\\%', '%')
+                            accumulated = "".join(current).replace("\\%", "%")
                             # Create a SigmaString to handle escapes and wildcards normally
                             temp = SigmaString(accumulated, escape=True)
                             result.extend(temp.s)
@@ -322,7 +322,7 @@ class SigmaString(SigmaType):
                         j += 1
                 else:
                     # No closing percent found - % is just a literal character
-                    current.append('%')
+                    current.append("%")
                     i += 1
             else:
                 # Regular character or escaped character
@@ -331,7 +331,7 @@ class SigmaString(SigmaType):
 
         # Process remaining accumulated string
         if current:
-            accumulated = ''.join(current).replace('\\%', '%')
+            accumulated = "".join(current).replace("\\%", "%")
             temp = SigmaString(accumulated, escape=True)
             result.extend(temp.s)
 
@@ -349,23 +349,23 @@ class SigmaString(SigmaType):
         escape_map = [False] * len(s)
         i = 0
         while i < len(s):
-            if s[i] == '\\':
+            if s[i] == "\\":
                 # Count consecutive backslashes
                 j = i
-                while j < len(s) and s[j] == '\\':
+                while j < len(s) and s[j] == "\\":
                     j += 1
                 # Now j points to the first non-backslash character
                 # The number of backslashes is (j - i)
                 num_backslashes = j - i
-                
+
                 # If odd number of backslashes, the next character is escaped
                 if j < len(s) and num_backslashes % 2 == 1:
                     escape_map[j] = True
-                
+
                 i = j
             else:
                 i += 1
-        
+
         return escape_map
 
     @staticmethod
@@ -377,25 +377,25 @@ class SigmaString(SigmaType):
         result = []
         i = 0
         while i < len(name):
-            if name[i] == '\\' and i + 1 < len(name):
+            if name[i] == "\\" and i + 1 < len(name):
                 next_char = name[i + 1]
-                if next_char == '%':
+                if next_char == "%":
                     # \% → %
-                    result.append('%')
+                    result.append("%")
                     i += 2
-                elif next_char == '\\':
+                elif next_char == "\\":
                     # \\ → \
-                    result.append('\\')
+                    result.append("\\")
                     i += 2
                 else:
                     # \ followed by other → both are literal
-                    result.append('\\')
+                    result.append("\\")
                     result.append(next_char)
                     i += 2
             else:
                 result.append(name[i])
                 i += 1
-        return ''.join(result)
+        return "".join(result)
 
     def replace_with_placeholder(
         self, regex: re.Pattern[str], placeholder_name: str
